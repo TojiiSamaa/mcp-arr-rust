@@ -21,15 +21,15 @@ Destructive: `arr_delete`, `arr_queue_remove`, `arr_terminate_stream` (Tracearr 
 docker run --rm -i \
   -e SONARR_URL=http://sonarr.example:8989 \
   -e SONARR_API_KEY=your-sonarr-api-key \
-  ghcr.io/<owner>/arrmcp:latest
+  ghcr.io/tojiisamaa/mcp-arr-rust:latest
 ```
-HTTP mode (the image name above is a placeholder until the first release):
+HTTP mode:
 ```bash
 docker run -d -p 3000:3000 \
   -e MCP_TRANSPORT=http -e PORT=3000 \
   -e ARR_MCP_TOKEN=a-long-random-token \
   -e SONARR_URL=http://sonarr.example:8989 -e SONARR_API_KEY=your-sonarr-api-key \
-  ghcr.io/<owner>/arrmcp:latest
+  ghcr.io/tojiisamaa/mcp-arr-rust:latest
 ```
 
 ### From source

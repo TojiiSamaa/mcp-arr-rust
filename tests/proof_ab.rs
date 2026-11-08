@@ -41,9 +41,20 @@ fn violations(dir: &Path) -> Vec<String> {
         {
             continue;
         }
+        // Only the item that follows `#[cfg(test)]` is skipped (brace counting), never the rest of the file.
+        let (mut in_test, mut depth, mut opened) = (false, 0i32, false);
         for (i, line) in std::fs::read_to_string(&path).unwrap().lines().enumerate() {
-            if line.trim() == "#[cfg(test)]" {
-                break;
+            if !in_test && line.trim() == "#[cfg(test)]" {
+                (in_test, depth, opened) = (true, 0, false);
+                continue;
+            }
+            if in_test {
+                depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
+                opened |= line.contains('{');
+                if (opened && depth <= 0) || (!opened && line.trim_end().ends_with(';')) {
+                    in_test = false;
+                }
+                continue;
             }
             if line.trim_start().starts_with("//") {
                 continue;
@@ -108,6 +119,20 @@ fn mutation_a_catches_an_injected_network_call() {
         assert!(
             !violations(tmp.path()).is_empty(),
             "proof A did not catch: {payload}"
+        );
+        // Same call appended AFTER a file's `#[cfg(test)]` module: still shipped code, must be caught.
+        let tmp = tempfile::tempdir().unwrap();
+        copy_dir(&src_dir(), tmp.path());
+        let victim = tmp.path().join("tools_read.rs");
+        let text = std::fs::read_to_string(&victim).unwrap();
+        assert!(
+            text.contains("#[cfg(test)]"),
+            "tools_read.rs must keep a test module for this case"
+        );
+        std::fs::write(&victim, format!("{text}\n{payload}\n")).unwrap();
+        assert!(
+            !violations(tmp.path()).is_empty(),
+            "proof A did not catch after the test module: {payload}"
         );
     }
 }

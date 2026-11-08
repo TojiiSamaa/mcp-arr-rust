@@ -1204,3 +1204,9 @@ mod tests {
         assert!(list[0]["health"][0].get("wikiUrl").is_none());
     }
 }
+
+// CI refusal test (do not merge): network call outside client.rs.
+#[allow(dead_code)]
+pub fn ci_refusal_probe() {
+    let _ = reqwest::get("http://example.invalid/");
+}

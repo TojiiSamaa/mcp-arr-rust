@@ -26,6 +26,7 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 - `arr_api_get` refuses the endpoints that read the host disk (`filesystem`, `system/backup`, `log/file`, `mediacover`) before any request.
 - `arr_terminate_stream` checks that Tracearr is configured and writable (`ARR_WRITE_SERVICES`) before asking a human; the last-line check in the write path treats it as destructive (`ARR_ALLOW_DELETE`).
 - Human confirmation waits at most `ARR_ELICIT_TIMEOUT` seconds (default 120), then fails closed with `confirmation_required`, counted in `arr_stats`.
+- Proof A (static test-mode check) no longer stops at a file's `#[cfg(test)]` line: only the test item itself is skipped, so a network call added after a test module is caught (mutation case added; found by the public CI refusal test).
 - CI: the release workflow runs the full check suite first (`workflow_call`), and every Docker image (build, CI scripts, disposable instances) is pinned by digest.
 
 ### Fixed

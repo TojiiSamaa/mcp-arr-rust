@@ -1,0 +1,39 @@
+[package]
+name = "arrmcp"
+version = "1.0.0"
+edition = "2021"
+description = "Serveur MCP *arr (portage Rust de mcp-arr) : Sonarr, Radarr, Lidarr, Prowlarr, Tracearr ; lecture + écriture gardée."
+license = "MIT"
+rust-version = "1.82"
+
+[lib]
+name = "arrmcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "arrmcp"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "sync", "time", "io-util", "io-std", "fs", "signal", "net"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+regex = "1"
+futures = "0.3"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+axum = { version = "0.8", default-features = false, features = ["tokio", "http1"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+
+[profile.dev]
+debug = 0
+incremental = false

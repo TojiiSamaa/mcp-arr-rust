@@ -1,0 +1,63 @@
+name: Test CI
+
+# Dépôt public : runners GitHub-hébergés uniquement, déclencheur pull_request seul, aucun secret.
+# Chaque job appelle un script de scripts/ci/ (mêmes commandes en local, dans Docker).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Appelé par release-arr.yml : aucune publication sans ces contrôles.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fmt-clippy:
+    name: Format and clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - run: scripts/ci/fmt-clippy.sh
+
+  test:
+    name: Unit and end-to-end (stdio and HTTP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - run: scripts/ci/test.sh
+
+  proof-ab:
+    name: Proof A, mutation, proof B (no network)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - run: scripts/ci/proof-ab.sh
+
+  audit:
+    name: cargo audit and cargo deny
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - run: scripts/ci/audit.sh
+
+  build-contract:
+    name: Release build and tools/list - skill - README contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - run: scripts/ci/build-release.sh
+      - name: Contract tools/list - skill - README
+        run: |
+          docker run --rm -v arr-target:/target -v "$PWD":/out alpine:3@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a cp /target/release/arrmcp /out/arrmcp
+          scripts/ci/check-skill.sh "$PWD/arrmcp"

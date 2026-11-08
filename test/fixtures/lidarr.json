@@ -1,0 +1,204 @@
+{
+ "system/status": {
+  "appName": "Lidarr",
+  "version": "2.0.0.0",
+  "instanceName": "Lidarr",
+  "isProduction": true,
+  "startTime": "2026-01-01T00:00:00Z"
+ },
+ "health": [
+  {
+   "source": "IndexerStatusCheck",
+   "type": "warning",
+   "message": "Indexeur fictif indisponible"
+  }
+ ],
+ "tag": [
+  {
+   "id": 1,
+   "label": "exemple"
+  }
+ ],
+ "qualityprofile": [
+  {
+   "id": 1,
+   "name": "Profil fictif",
+   "upgradeAllowed": true,
+   "cutoff": 1,
+   "items": []
+  }
+ ],
+ "rootfolder": [
+  {
+   "id": 1,
+   "path": "/data/exemple",
+   "accessible": true,
+   "freeSpace": 1000000000
+  }
+ ],
+ "indexer": [
+  {
+   "id": 1,
+   "name": "Indexeur fictif",
+   "enable": true,
+   "protocol": "torrent",
+   "priority": 25,
+   "fields": [
+    {
+     "name": "apiKey",
+     "value": "secret-fictif"
+    }
+   ]
+  }
+ ],
+ "downloadclient": [
+  {
+   "id": 1,
+   "name": "Client fictif",
+   "enable": true,
+   "protocol": "torrent",
+   "priority": 1,
+   "fields": [
+    {
+     "name": "password",
+     "value": "secret-fictif"
+    }
+   ]
+  }
+ ],
+ "customformat": [
+  {
+   "id": 1,
+   "name": "Format fictif",
+   "specifications": []
+  }
+ ],
+ "naming": {
+  "id": 1,
+  "renameEpisodes": true
+ },
+ "command": [
+  {
+   "id": 1,
+   "name": "RefreshSeries",
+   "status": "completed",
+   "queued": "2026-01-01T00:00:00Z"
+  }
+ ],
+ "release": [
+  {
+   "guid": "guid-fictif-1",
+   "indexerId": 1,
+   "title": "Titre.Fictif.1080p",
+   "size": 1500000000,
+   "approved": true,
+   "protocol": "torrent",
+   "seeders": 10
+  }
+ ],
+ "calendar": [
+  {
+   "id": 1,
+   "title": "Calendrier fictif",
+   "airDateUtc": "2026-01-02T00:00:00Z"
+  }
+ ],
+ "queue": {
+  "page": 1,
+  "pageSize": 20,
+  "totalRecords": 1,
+  "records": [
+   {
+    "id": 1,
+    "title": "Titre fictif",
+    "status": "downloading",
+    "size": 1000,
+    "sizeleft": 400,
+    "downloadId": "dl-fictif"
+   }
+  ]
+ },
+ "history": {
+  "page": 1,
+  "pageSize": 20,
+  "totalRecords": 1,
+  "records": [
+   {
+    "id": 1,
+    "eventType": "grabbed",
+    "date": "2026-01-01T00:00:00Z",
+    "sourceTitle": "Titre.Fictif"
+   }
+  ]
+ },
+ "wanted/missing": {
+  "page": 1,
+  "pageSize": 20,
+  "totalRecords": 1,
+  "records": [
+   {
+    "id": 1,
+    "title": "Manquant fictif",
+    "monitored": true
+   }
+  ]
+ },
+ "wanted/cutoff": {
+  "page": 1,
+  "pageSize": 20,
+  "totalRecords": 1,
+  "records": [
+   {
+    "id": 2,
+    "title": "Seuil fictif",
+    "monitored": true
+   }
+  ]
+ },
+ "artist": [
+  {
+   "id": 1,
+   "artistName": "Artiste fictif",
+   "monitored": true,
+   "foreignArtistId": "fictif-1",
+   "path": "/data/exemple/artiste",
+   "qualityProfileId": 1,
+   "metadataProfileId": 1
+  }
+ ],
+ "album": [
+  {
+   "id": 1,
+   "title": "Album fictif",
+   "artistId": 1,
+   "monitored": true,
+   "foreignAlbumId": "fictif-1"
+  }
+ ],
+ "artist/lookup": [
+  {
+   "title": "Artiste fictif",
+   "year": 2020,
+   "tvdbId": 1,
+   "tmdbId": 1,
+   "foreignArtistId": "fictif-1",
+   "foreignAlbumId": "fictif-1"
+  }
+ ],
+ "album/lookup": [
+  {
+   "title": "Album fictif",
+   "year": 2020,
+   "tvdbId": 1,
+   "tmdbId": 1,
+   "foreignArtistId": "fictif-1",
+   "foreignAlbumId": "fictif-1"
+  }
+ ],
+ "metadataprofile": [
+  {
+   "id": 1,
+   "name": "Profil métadonnées fictif"
+  }
+ ]
+}

@@ -1,0 +1,127 @@
+{
+ "health": {
+  "status": "ok"
+ },
+ "streams": {
+  "data": [
+   {
+    "id": "str-fictif-1",
+    "user": "utilisateur-fictif",
+    "title": "Titre fictif",
+    "state": "playing",
+    "serverId": "srv-fictif-1"
+   }
+  ],
+  "meta": {
+   "nextCursor": null
+  }
+ },
+ "history": {
+  "data": [
+   {
+    "id": "his-fictif-1",
+    "user": "utilisateur-fictif",
+    "title": "Titre fictif",
+    "startedAt": "2026-01-01T00:00:00Z"
+   }
+  ],
+  "meta": {
+   "nextCursor": null
+  }
+ },
+ "violations": {
+  "data": [
+   {
+    "id": "vio-fictif-1",
+    "type": "concurrent_streams",
+    "user": "utilisateur-fictif",
+    "severity": "low"
+   }
+  ],
+  "meta": {
+   "nextCursor": null
+  }
+ },
+ "servers": {
+  "data": [
+   {
+    "id": "srv-fictif-1",
+    "name": "Serveur fictif",
+    "type": "plex",
+    "online": true
+   }
+  ],
+  "meta": {
+   "nextCursor": null
+  }
+ },
+ "users": {
+  "data": [
+   {
+    "id": "usr-fictif-1",
+    "username": "utilisateur-fictif",
+    "role": "member"
+   }
+  ],
+  "meta": {
+   "nextCursor": null
+  }
+ },
+ "libraries": {
+  "data": [
+   {
+    "id": "lib-fictif-1",
+    "name": "Bibliothèque fictive"
+   }
+  ],
+  "meta": {
+   "nextCursor": null
+  }
+ },
+ "recently-added": {
+  "data": [
+   {
+    "id": "rec-fictif-1",
+    "title": "Ajout fictif"
+   }
+  ],
+  "meta": {
+   "nextCursor": null
+  }
+ },
+ "watched-media": {
+  "data": [
+   {
+    "id": "wat-fictif-1",
+    "title": "Vu fictif"
+   }
+  ],
+  "meta": {
+   "nextCursor": null
+  }
+ },
+ "top-media": {
+  "data": [
+   {
+    "id": "top-fictif-1",
+    "title": "Populaire fictif",
+    "plays": 3
+   }
+  ],
+  "meta": {
+   "nextCursor": null
+  }
+ },
+ "media": {
+  "id": "med-fictif-1",
+  "title": "Média fictif"
+ },
+ "stats": {
+  "activeStreams": 1,
+  "users": 1,
+  "violations": 1
+ },
+ "streams/terminate": {
+  "success": true
+ }
+}

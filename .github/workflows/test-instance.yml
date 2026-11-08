@@ -1,7 +1,8 @@
 name: Test instance
 
-# Niveau instance jetable (Sonarr, Radarr, Lidarr, Prowlarr aux versions épinglées dans scripts/ci/instance.sh).
-# Pas à chaque PR : à la main et chaque semaine. Aucun secret : la clé d'API est aléatoire et locale au job.
+# Niveau instance jetable (Sonarr, Radarr, Lidarr, Prowlarr, Tracearr aux versions épinglées dans scripts/ci/instance.sh) :
+# lectures, écritures, dry-run, confirmations et masquage contrôlés contre l'état réel des instances.
+# Pas à chaque PR : à la main et chaque semaine. Aucun secret : les clés d'API sont aléatoires et locales au job.
 
 on:
   workflow_dispatch:
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   instance:
-    name: Disposable instances, read tools replayed
+    name: Disposable instances, read and write tools replayed
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

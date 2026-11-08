@@ -43,7 +43,7 @@ Level: **read** = always allowed; **write** = needs `ARR_ALLOW_WRITES=true` (acc
 All read tools accept `fields` (keep only these keys) and, when they return lists, `limit` (capped by `ARR_MAX_LIMIT`, default 100). `service` is one of `sonarr|radarr|lidarr|prowlarr|tracearr`.
 
 - `arr_status` `{}`. Example: `arr_status {}`.
-- `arr_list` `{service, resource, filters?, fields?, limit?, offset?, cursor?, pageSize?}`. `resource` is whitelisted per service: `series`, `episode` (sonarr); `movie` (radarr); `artist`, `album` (lidarr); `qualityprofile`, `tag`, `rootfolder`, `indexer`, `downloadclient`, `customformat`, `naming`... ; Tracearr: `streams`, `history`, `violations`, `servers`, `users`, `libraries`, `recently-added`, `watched-media`, `top-media`, `stats`. Keep `offset` a multiple of `limit`. Episodes and albums need a filter such as `{"seriesId":3}` or `{"artistId":7}`. Tracearr pages with `cursor` (taken from the previous answer) and `pageSize` (max 100). Example: `arr_list {"service":"sonarr","resource":"series","fields":["id","title","monitored"],"limit":20}`.
+- `arr_list` `{service, resource, filters?, fields?, limit?, offset?, cursor?, pageSize?}`. `resource` is whitelisted per service: `series`, `episode` (sonarr); `movie` (radarr); `artist`, `album` (lidarr); `qualityprofile`, `tag`, `rootfolder`, `indexer`, `downloadclient`, `customformat`, `naming`... ; Tracearr: `streams`, `history`, `violations`, `servers`, `users`, `libraries`, `recently-added`, `watched-media`, `top-media`, `stats`. Keep `offset` a multiple of `limit`. Episodes and albums need a filter such as `{"seriesId":3}` or `{"artistId":7}`. Tracearr pages with `cursor` (`result.meta.nextCursor` of the previous answer, `null` on the last page) and `pageSize` (max 100); `watched-media` needs `filters.media_type` (`movie`, `show` or `episode`) and `top-media` too (`movie` or `show`). Example: `arr_list {"service":"sonarr","resource":"series","fields":["id","title","monitored"],"limit":20}`.
 - `arr_get` `{service, resource, id, fields?}`. Example: `arr_get {"service":"radarr","resource":"movie","id":42}`. Missing object: `found:false`.
 - `arr_lookup` `{service, term, limit?, fields?}`. Example: `arr_lookup {"service":"sonarr","term":"Example Show"}`; `tvdb:123`, `tmdb:456` style terms work where the application supports them.
 - `arr_queue` `{service, filters?, page?, limit?, fields?}`. Example: `arr_queue {"service":"sonarr","fields":["id","title","status","errorMessage"]}`.
@@ -69,7 +69,7 @@ All read tools accept `fields` (keep only these keys) and, when they return list
 
 - `arr_delete` `{service, resource, id, delete_files?, add_import_exclusion?, dry_run?}`. The two flags default to false and apply only to series, movie, artist, album; `delete_files` removes media from disk. Dry-run returns `exists`, the object and the request. Example: `arr_delete {"service":"radarr","resource":"movie","id":42,"dry_run":true}`.
 - `arr_queue_remove` `{service: sonarr|radarr|lidarr, id, remove_from_client?, blocklist?, dry_run?}`; flags default to false. Example: `arr_queue_remove {"service":"sonarr","id":99,"remove_from_client":true,"blocklist":true}`.
-- `arr_terminate_stream` `{id, dry_run?}` (no `service`: always Tracearr). Cuts a viewer's playback. Example: `arr_terminate_stream {"id":"<stream id>"}`.
+- `arr_terminate_stream` `{id, dry_run?}` (no `service`: always Tracearr). Cuts a viewer's playback. `id` is the session UUID given as `id` by `arr_list tracearr streams`; anything else is refused. Example: `arr_terminate_stream {"id":"3f2b8c1e-0a4d-4e6f-9b7a-1c2d3e4f5a6b"}`.
 
 The `inputSchema` returned by `tools/list` is authoritative; if this page and the schema differ, the schema wins and this file is a bug to report. When `ARR_CONFIRM_ARG` is on, gated tools also show an optional `confirm` boolean: send `true` only after the human agreed to that exact action.
 
@@ -134,7 +134,7 @@ Same pattern for movies and artists.
 ### Watch playback on Tracearr
 1. `arr_list {service:"tracearr", resource:"streams"}` for live sessions.
 2. `arr_list {resource:"violations"}` and `history` (cursor pagination: pass back `cursor`; `pageSize` <= 100).
-3. `arr_list {resource:"top-media"}` / `stats` for summaries.
+3. `arr_list {resource:"top-media", filters:{media_type:"movie"}}` / `stats` for summaries.
 4. Only if the operator asks to cut a session: `arr_terminate_stream {id}` (destructive, admin validation).
 
 ### Reach an endpoint no tool covers

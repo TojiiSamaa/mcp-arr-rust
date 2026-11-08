@@ -44,7 +44,7 @@ fn write_calls() -> Vec<(&'static str, Value)> {
         ),
         (
             "arr_terminate_stream",
-            json!({ "id": "s1", "dry_run": false }),
+            json!({ "id": "00000000-0000-4000-8000-000000000001", "dry_run": false }),
         ),
     ]
 }
@@ -779,10 +779,14 @@ async fn terminate_checks_tracearr_and_policy_before_asking_a_human() {
         )
         .await;
         let s2 = s.clone();
-        let task =
-            tokio::spawn(
-                async move { call(&s2, "arr_terminate_stream", json!({ "id": "s1" })).await },
-            );
+        let task = tokio::spawn(async move {
+            call(
+                &s2,
+                "arr_terminate_stream",
+                json!({ "id": "00000000-0000-4000-8000-000000000001" }),
+            )
+            .await
+        });
         let done = tokio::time::timeout(std::time::Duration::from_secs(2), task).await;
         assert!(rx.try_recv().is_err(), "{kind} : un humain a été sollicité");
         let (err, v) = done.expect("en attente d'une confirmation").unwrap();

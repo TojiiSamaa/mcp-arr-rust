@@ -373,6 +373,23 @@ fn list_request(def: &ServiceDef, a: &Args, limit: i64, offset: i64) -> Result<(
         q.push(("page".into(), (offset / limit + 1).to_string()));
         q.push(("pageSize".into(), limit.to_string()));
     } else {
+        // Tracearr exige `media_type` sur ces deux listes (400 sinon).
+        let need = match path.as_str() {
+            "watched-media" => Some(&["movie", "show", "episode"][..]),
+            "top-media" => Some(&["movie", "show"][..]),
+            _ => None,
+        };
+        if let Some(values) = need {
+            if !q
+                .iter()
+                .any(|(k, v)| k == "media_type" && values.contains(&v.as_str()))
+            {
+                return Err(bad(format!(
+                    "Tracearr `{path}` needs `filters.media_type`: one of {}.",
+                    values.join(", ")
+                )));
+            }
+        }
         q.push((
             "pageSize".into(),
             a.int("pageSize").unwrap_or(limit).clamp(1, 100).to_string(),
@@ -738,7 +755,7 @@ pub fn tools(cfg: &Config) -> Vec<ToolDef> {
         read(
             "arr_list",
             "List items of a resource",
-            format!("List a resource: sonarr series/episode/qualityprofile/tag/rootfolder/indexer/downloadclient/customformat/naming..., radarr movie..., lidarr artist/album..., prowlarr indexer..., tracearr streams/history/violations/servers/users/libraries/recently-added/watched-media/top-media/stats. Library lists are big: set `fields` and a small `limit`. For paged resources keep `offset` a multiple of `limit`. Episodes and albums need a filter such as {{\"seriesId\": 3}} or {{\"artistId\": 7}}. Tracearr pages by `cursor` (from the previous answer) and `pageSize` (max 100). {cn}"),
+            format!("List a resource: sonarr series/episode/qualityprofile/tag/rootfolder/indexer/downloadclient/customformat/naming..., radarr movie..., lidarr artist/album..., prowlarr indexer..., tracearr streams/history/violations/servers/users/libraries/recently-added/watched-media/top-media/stats. Library lists are big: set `fields` and a small `limit`. For paged resources keep `offset` a multiple of `limit`. Episodes and albums need a filter such as {{\"seriesId\": 3}} or {{\"artistId\": 7}}. Tracearr pages by `cursor` (meta.nextCursor of the previous answer) and `pageSize` (max 100); its watched-media and top-media need filters {{\"media_type\": \"movie\"}} (or show; watched-media also episode). {cn}"),
             vec![
                 f_service("Service to read."),
                 string("resource").desc("Resource name from the service's whitelist (the error lists the allowed ones)."),
@@ -1014,6 +1031,19 @@ mod tests {
             0
         )
         .is_err());
+        // Tracearr (MESURÉ v3.1.7) : sans `media_type`, watched-media et top-media répondent 400 ; refusé avant requête.
+        for (r, okv, badv) in [
+            ("watched-media", "episode", "season"),
+            ("top-media", "show", "episode"),
+        ] {
+            let l = |f: Value| list_request(tr, &args(json!({"resource": r, "filters": f})), 10, 0);
+            assert!(l(json!({})).is_err(), "{r}");
+            assert!(l(json!({"media_type": badv})).is_err(), "{r}");
+            assert_eq!(
+                l(json!({"media_type": okv})).unwrap().1[0],
+                ("media_type".to_string(), okv.to_string())
+            );
+        }
     }
 
     #[test]

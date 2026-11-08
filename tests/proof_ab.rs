@@ -217,7 +217,7 @@ fn sample_args(t: &Tool) -> Value {
             } else {
                 "series"
             }),
-            "id" if schema["type"] == "string" => json!("str-fictif-1"),
+            "id" if schema["type"] == "string" => json!("00000000-0000-4000-8000-000000000001"),
             "id" | "indexerId" | "seriesId" | "movieId" | "artistId" | "albumId" | "episodeId" => {
                 json!(1)
             }

@@ -480,16 +480,17 @@ fn queue_remove(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
 
 // ---------- arr_terminate_stream ----------
 
+/// Tracearr n'accepte qu'un UUID de session (8-4-4-4-12 hexadécimaux) : le reste est refusé avant requête.
 fn stream_id(a: &Args) -> Result<&str> {
     let id = a.text("id");
-    if id.is_empty()
-        || id.len() > 64
-        || !id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-    {
+    let groups: Vec<&str> = id.split('-').collect();
+    let uuid = groups.iter().map(|g| g.len()).eq([8, 4, 4, 4, 12])
+        && groups
+            .iter()
+            .all(|g| g.chars().all(|c| c.is_ascii_hexdigit()));
+    if !uuid {
         return Err(bad(
-            "`id` must be a stream id (letters, digits, - and _ only).",
+            "`id` must be a stream session id, a UUID such as 3f2b8c1e-0a4d-4e6f-9b7a-1c2d3e4f5a6b (the `id` of arr_list tracearr streams).",
         ));
     }
     Ok(id)
@@ -772,7 +773,7 @@ pub fn tools(_cfg: &Config) -> Vec<ToolDef> {
             "arr_terminate_stream",
             "Terminate a Tracearr stream",
             "Tracearr only: cut a user's playback (POST /api/v1/public/streams/{id}/terminate).",
-            vec![string("id").desc("Stream id (arr_list tracearr streams).")],
+            vec![string("id").desc("Session UUID: the `id` of arr_list tracearr streams.")],
             Access::Destructive,
             false,
             terminate_stream,
@@ -894,7 +895,20 @@ mod tests {
 
     #[test]
     fn stream_id_validation() {
-        assert!(stream_id(&args(json!({ "id": "a1-b_2" }))).is_ok());
+        assert!(stream_id(&args(
+            json!({ "id": "3f2b8c1e-0a4d-4e6f-9b7a-1c2d3e4f5a6b" })
+        ))
+        .is_ok());
+        // Tracearr (MESURÉ v3.1.7) : un id qui n'est pas un UUID -> 400 « Invalid session ID » ; refusé avant requête.
+        assert!(stream_id(&args(json!({ "id": "a1-b_2" }))).is_err());
+        assert!(stream_id(&args(
+            json!({ "id": "3f2b8c1e-0a4d-4e6f-9b7a-1c2d3e4f5a6" })
+        ))
+        .is_err());
+        assert!(stream_id(&args(
+            json!({ "id": "3f2b8c1e00a4d-4e6f-9b7a-1c2d3e4f5a6b" })
+        ))
+        .is_err());
         assert!(stream_id(&args(json!({ "id": "../x" }))).is_err());
         assert!(stream_id(&args(json!({ "id": "" }))).is_err());
     }

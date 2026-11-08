@@ -29,6 +29,7 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 - CI: the release workflow runs the full check suite first (`workflow_call`), and every Docker image (build, CI scripts, disposable instances) is pinned by digest.
 
 ### Fixed
+- Tracearr, checked against a disposable v3.1.7 instance: `arr_list` `watched-media` and `top-media` require `filters.media_type` (`movie`, `show`, `episode` / `movie`, `show`) and are refused before any request without it (the service answered 400); `arr_terminate_stream` accepts only a session UUID (the `id` of `streams`), anything else is refused before any request (the service answered 400 "Invalid session ID").
 - stdio: when the input closes, every running call still answers (bounded by `2 × ARR_TIMEOUT + 5` s) instead of being cut after 2 s.
 - Test mode: a path outside the fixtures is counted as `egress_blocked`, not as a simulated request.
 - Server instructions and skill: exact list of tools without `service`; `RssSync` is sonarr/radarr only; no `outputSchema` claim.

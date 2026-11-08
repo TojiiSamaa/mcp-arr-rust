@@ -105,7 +105,7 @@ Server (all closed or conservative by default):
 ## What is not tested
 
 - DEDUCED, not measured, until the disposable-instance CI level has run: the exact response shapes of real Sonarr/Radarr/Lidarr/Prowlarr versions.
-- Tracearr: endpoints taken from its public API documentation by web search, not tested against a running instance. Two third-party Tracearr MCP servers exist and were not read.
+- Tracearr: reads, cursor pagination and the terminate route checked against a disposable v3.1.7 instance (`scripts/ci/instance.sh`, fictive data seeded in its database). Not checked: cutting a real playback (needs a media server with an active session). Two third-party Tracearr MCP servers exist and were not read.
 - Readarr, Whisparr, Bazarr: not supported.
 - Windows and macOS builds are not covered by CI.
 

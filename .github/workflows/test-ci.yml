@@ -79,12 +79,15 @@ jobs:
     steps:
       - run: echo "all test jobs passed"
 
-  # N'agit que si Toji active "Allow auto-merge" sur le depot ET une protection de branche exigeant `tests` :
-  # sinon `gh pr merge --auto` echoue sans rien fusionner. Jamais lors de l'appel par release-arr (evenement push).
+  # ATTENTION : sans protection de branche exigeant `tests`, `gh pr merge --auto` fusionne TOUT DE SUITE une PR deja
+  # mergeable. Ce job est donc desactive tant que Toji n'a pas pose la variable de depot FUSION_AUTO=on, ce qu'il ne
+  # fait qu'APRES avoir active "Allow auto-merge" et la protection de `main` exigeant la verification `tests`.
+  # Jamais lors de l'appel par release-arr (evenement push).
   fusion-auto:
     name: Auto-merge when tests pass
     needs: tests
     if: >-
+      vars.FUSION_AUTO == 'on' &&
       github.event_name == 'pull_request' && github.event.pull_request.draft == false &&
       (github.event.pull_request.user.login == 'TojiiSamaa' || github.event.pull_request.user.login == 'dependabot[bot]')
     runs-on: ubuntu-latest

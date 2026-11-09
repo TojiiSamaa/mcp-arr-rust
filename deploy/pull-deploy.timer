@@ -1,7 +1,7 @@
 # Exemple : /etc/systemd/system/arrmcp-pull-deploy.timer (systemctl enable --now arrmcp-pull-deploy.timer).
 # Équivalent cron : */5 * * * * /opt/arrmcp/deploy/pull-deploy.sh
 [Unit]
-Description=arrmcp : vérifier une nouvelle image :prod toutes les 5 minutes
+Description=arrmcp : vérifier une nouvelle image :latest toutes les 5 minutes
 
 [Timer]
 OnBootSec=2min

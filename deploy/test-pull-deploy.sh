@@ -6,9 +6,9 @@ W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 mkdir -p "$W/bin" "$W/state"
 cat > "$W/bin/docker" <<'F'
 #!/usr/bin/env bash
-# état simulé : $FAKE/running = référence en service ; FAKE_PULLED = digest de :prod
+# état simulé : $FAKE/running = référence en service ; FAKE_PULLED = digest de :latest
 case "$1" in
-  pull) exit 0 ;;
+  pull) echo "$2" >> "$FAKE/pulls"; exit 0 ;;
   image) echo "ghcr.io/tojiisamaa/mcp-arr-rust@sha256:${FAKE_PULLED}" ;;
   inspect) cat "$FAKE/running" ;;
   compose)
@@ -43,6 +43,9 @@ check "previous = old" "$I@sha256:old" "$(cat "$W/state/previous")"
 : > "$W/ups"
 check "déjà à jour : code 0" 0 "$(FAKE_PULLED=new run)"
 check "déjà à jour : aucun up" 0 "$(wc -l < "$W/ups")"
+check "pull sur :latest par défaut" "$I:latest" "$(tail -1 "$W/pulls")"
+TAG=1.1.0 FAKE_PULLED=new run >/dev/null
+check "TAG=1.1.0 : pull sur :1.1.0" "$I:1.1.0" "$(tail -1 "$W/pulls")"
 
 check "échec de santé -> rollback (code 1)" 1 "$(FAKE_PULLED=bad FAKE_BAD=sha256:bad run)"
 check "service revenu sur new" "$I@sha256:new" "$(cat "$W/running")"

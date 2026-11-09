@@ -1,0 +1,8 @@
+# Exemple de service pour pull-deploy.sh : l'image est pilotée par ARR_IMAGE (digest), :prod par défaut.
+# MCP_TRANSPORT http + jeton : le conteneur écoute sur 8000 (voir Dockerfile) ; /health sert au contrôle de santé.
+services:
+  arrmcp:
+    image: ${ARR_IMAGE:-ghcr.io/tojiisamaa/mcp-arr-rust:prod}
+    restart: unless-stopped
+    ports: ["127.0.0.1:8000:8000"]
+    env_file: /etc/arrmcp/arrmcp.env   # SONARR_URL, SONARR_API_KEY, ARR_MCP_TOKEN... (hors dépôt)

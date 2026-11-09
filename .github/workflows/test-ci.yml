@@ -61,3 +61,39 @@ jobs:
         run: |
           docker run --rm -v arr-target:/target -v "$PWD":/out alpine:3@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a cp /target/release/arrmcp /out/arrmcp
           scripts/ci/check-skill.sh "$PWD/arrmcp"
+
+  pull-sim:
+    name: Pull script simulation (success, up to date, rollback)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - run: bash -n deploy/pull-deploy.sh && deploy/test-pull-deploy.sh
+
+  # Nom stable `tests` : la verification que la protection de branche doit exiger.
+  tests:
+    name: tests
+    needs: [fmt-clippy, test, proof-ab, audit, build-contract, pull-sim]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "all test jobs passed"
+
+  # N'agit que si Toji active "Allow auto-merge" sur le depot ET une protection de branche exigeant `tests` :
+  # sinon `gh pr merge --auto` echoue sans rien fusionner. Jamais lors de l'appel par release-arr (evenement push).
+  fusion-auto:
+    name: Auto-merge when tests pass
+    needs: tests
+    if: >-
+      github.event_name == 'pull_request' && github.event.pull_request.draft == false &&
+      (github.event.pull_request.user.login == 'TojiiSamaa' || github.event.pull_request.user.login == 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"

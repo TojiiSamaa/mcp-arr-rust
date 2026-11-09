@@ -170,6 +170,166 @@ fn pick(v: Value, fields: &[String]) -> Value {
     }
 }
 
+/// Champs gardés par `compact: true` quand `fields` est vide : de quoi décider et enchaîner (ids, titre, état,
+/// erreurs) sans les images, liens, synopsis et objets imbriqués qui font l'essentiel du poids d'une réponse.
+fn compact_keys(tool: &str, resource: &str) -> &'static [&'static str] {
+    match (tool, resource) {
+        ("arr_list", "series") => &[
+            "id",
+            "title",
+            "year",
+            "status",
+            "monitored",
+            "qualityProfileId",
+            "path",
+            "tags",
+            "statistics",
+        ],
+        ("arr_list", "movie") => &[
+            "id",
+            "title",
+            "year",
+            "status",
+            "monitored",
+            "hasFile",
+            "qualityProfileId",
+            "sizeOnDisk",
+            "path",
+            "tags",
+        ],
+        ("arr_list", "artist") => &[
+            "id",
+            "artistName",
+            "status",
+            "monitored",
+            "qualityProfileId",
+            "metadataProfileId",
+            "path",
+            "tags",
+            "statistics",
+        ],
+        ("arr_list", "album") => &[
+            "id",
+            "title",
+            "artistId",
+            "releaseDate",
+            "albumType",
+            "monitored",
+            "statistics",
+        ],
+        ("arr_list", "episode") => &[
+            "id",
+            "seriesId",
+            "seasonNumber",
+            "episodeNumber",
+            "title",
+            "airDate",
+            "monitored",
+            "hasFile",
+            "episodeFileId",
+        ],
+        ("arr_list", "track") => &[
+            "id",
+            "albumId",
+            "trackNumber",
+            "title",
+            "hasFile",
+            "trackFileId",
+        ],
+        ("arr_list", "episodefile" | "moviefile" | "trackfile") => &[
+            "id",
+            "seriesId",
+            "movieId",
+            "albumId",
+            "relativePath",
+            "path",
+            "size",
+            "quality",
+            "dateAdded",
+            "qualityCutoffNotMet",
+        ],
+        ("arr_queue", _) => &[
+            "id",
+            "title",
+            "status",
+            "trackedDownloadStatus",
+            "trackedDownloadState",
+            "errorMessage",
+            "statusMessages",
+            "size",
+            "sizeleft",
+            "timeleft",
+            "protocol",
+            "downloadClient",
+            "indexer",
+            "seriesId",
+            "episodeId",
+            "movieId",
+            "artistId",
+            "albumId",
+        ],
+        ("arr_history", _) => &[
+            "id",
+            "eventType",
+            "date",
+            "sourceTitle",
+            "seriesId",
+            "episodeId",
+            "movieId",
+            "artistId",
+            "albumId",
+            "downloadId",
+            "data",
+        ],
+        ("arr_wanted" | "arr_calendar", _) => &[
+            "id",
+            "title",
+            "year",
+            "seriesId",
+            "seasonNumber",
+            "episodeNumber",
+            "airDate",
+            "artistId",
+            "albumType",
+            "releaseDate",
+            "monitored",
+            "hasFile",
+            "status",
+            "qualityCutoffNotMet",
+        ],
+        ("arr_releases", _) => &[
+            "guid",
+            "title",
+            "indexerId",
+            "indexer",
+            "quality",
+            "size",
+            "seeders",
+            "leechers",
+            "age",
+            "protocol",
+            "approved",
+            "rejected",
+            "rejections",
+            "downloadAllowed",
+            "customFormatScore",
+        ],
+        _ => &[],
+    }
+}
+
+/// `fields` explicite, sinon (`compact: true`) la liste compacte de l'outil, sinon tout.
+fn fields_of(a: &Args, tool: &str, resource: &str) -> Vec<String> {
+    let f = a.strings("fields");
+    if f.is_empty() && a.flag("compact") {
+        return compact_keys(tool, resource)
+            .iter()
+            .map(|k| k.to_string())
+            .collect();
+    }
+    f
+}
+
 /// Tableau brut : tranche `offset..offset+limit`. Objet paginé (`records`/`data`/`items`) : borne la liste et
 /// garde le reste (page, totalRecords, curseur). Autre objet : `fields` seulement.
 fn shape_list(v: Value, fields: &[String], offset: i64, limit: i64) -> Value {
@@ -225,6 +385,9 @@ fn f_service(desc: &str) -> Field {
 }
 fn f_fields() -> Field {
     strings("fields").opt().desc("Top-level fields to keep in each item, e.g. [\"id\",\"title\"]. ALWAYS set it to cut tokens. Empty = everything.")
+}
+fn f_compact() -> Field {
+    boolean("compact").opt().desc("true = keep only the useful keys (ids, title, state, errors, sizes) when `fields` is empty: 5 to 30 times fewer tokens. Ignored for resources without a compact set.")
 }
 fn f_limit(cfg: &Config) -> Field {
     integer("limit")
@@ -415,7 +578,7 @@ fn list(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
         // Tableau brut : tranché ici. Objet paginé par le service : déjà tranché par `page`, seulement borné.
         let out = shape_list(
             raw,
-            &a.strings("fields"),
+            &fields_of(&a, "arr_list", a.text("resource")),
             if def.is_arr() { offset } else { 0 },
             limit,
         );
@@ -506,12 +669,18 @@ fn paged_query(cfg: &Config, a: &Args) -> Result<Query> {
     Ok(q)
 }
 
-async fn paged(a: Args, ctx: Arc<Ctx>, allowed: &[&str], path: Result<String>) -> Result<Value> {
+async fn paged(
+    a: Args,
+    ctx: Arc<Ctx>,
+    tool: &str,
+    allowed: &[&str],
+    path: Result<String>,
+) -> Result<Value> {
     let def = service_of(&ctx.cfg, &a, allowed)?;
     let path = path?;
     let q = paged_query(&ctx.cfg, &a)?;
     let raw = ctx.client.get(def.name, &path, &q).await?;
-    let out = shape_list(raw, &a.strings("fields"), 0, limit_of(&ctx.cfg, &a));
+    let out = shape_list(raw, &fields_of(&a, tool, ""), 0, limit_of(&ctx.cfg, &a));
     Ok(finish(
         &ctx,
         json!({ "service": def.name, "result": out, "note": NOTE }),
@@ -519,11 +688,11 @@ async fn paged(a: Args, ctx: Arc<Ctx>, allowed: &[&str], path: Result<String>) -
 }
 
 fn queue(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
-    boxed(async move { paged(a, ctx, &ARR3, Ok("queue".into())).await })
+    boxed(async move { paged(a, ctx, "arr_queue", &ARR3, Ok("queue".into())).await })
 }
 
 fn history(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
-    boxed(async move { paged(a, ctx, &ARR4, Ok("history".into())).await })
+    boxed(async move { paged(a, ctx, "arr_history", &ARR4, Ok("history".into())).await })
 }
 
 fn wanted_path(a: &Args) -> Result<String> {
@@ -538,7 +707,7 @@ fn wanted_path(a: &Args) -> Result<String> {
 fn wanted(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
     boxed(async move {
         let path = wanted_path(&a);
-        paged(a, ctx, &ARR3, path).await
+        paged(a, ctx, "arr_wanted", &ARR3, path).await
     })
 }
 
@@ -565,7 +734,12 @@ fn calendar(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
         let def = service_of(&ctx.cfg, &a, &ARR3)?;
         let q = calendar_query(&a)?;
         let raw = ctx.client.get(def.name, "calendar", &q).await?;
-        let out = shape_list(raw, &a.strings("fields"), 0, limit_of(&ctx.cfg, &a));
+        let out = shape_list(
+            raw,
+            &fields_of(&a, "arr_calendar", ""),
+            0,
+            limit_of(&ctx.cfg, &a),
+        );
         Ok(finish(
             &ctx,
             json!({ "service": def.name, "result": out, "note": NOTE }),
@@ -610,7 +784,7 @@ fn releases(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
         let raw = ctx.client.get(def.name, "release", &q).await?;
         let out = shape_list(
             raw,
-            &a.strings("fields"),
+            &fields_of(&a, "arr_releases", ""),
             offset_of(&a),
             limit_of(&ctx.cfg, &a),
         );
@@ -690,7 +864,34 @@ fn search_indexers(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
 
 /// Chemins qui lisent le disque de l'hôte *arr (navigateur de fichiers, sauvegardes, fichiers journaux, images) :
 /// refusés avant toute requête. Comparés sans casse (les routes *arr l'ignorent), segment par segment.
-const HOST_FILE_PATHS: [&str; 4] = ["filesystem", "system/backup", "log/file", "mediacover"];
+/// `manualimport` accepte `folder=<chemin hôte>` et liste les fichiers de n'importe quel dossier : refusé entier.
+const HOST_FILE_PATHS: [&str; 5] = [
+    "filesystem",
+    "system/backup",
+    "log/file",
+    "mediacover",
+    "manualimport",
+];
+
+/// GET qui ont un effet de bord ou ne finissent jamais : télécharger une release chez l'indexeur (compte comme un
+/// grab), recherche live Newznab, flux SSE Tracearr. (service, motif par segments, `*` = un segment.)
+const SIDE_EFFECT_GETS: [(&str, &str); 3] = [
+    ("prowlarr", "indexer/*/download"),
+    ("prowlarr", "indexer/*/newznab"),
+    ("tracearr", "events"),
+];
+
+fn check_no_side_effect(service: &str, path: &str) -> Result<()> {
+    let p = path.to_ascii_lowercase();
+    if SIDE_EFFECT_GETS
+        .iter()
+        .any(|(s, pat)| *s == service && services::pattern_covers(pat, &p))
+    {
+        return Err(ArrError::new(ErrorType::ResourceNotAllowed, "This GET has a side effect (download or live search at the indexer) or never ends (event stream): arr_api_get does not reach it. Nothing was sent.")
+            .hint("Do not retry. arr_search_indexers searches Prowlarr; arr_status shows health."));
+    }
+    Ok(())
+}
 
 fn check_not_host_files(path: &str) -> Result<()> {
     let p = path.to_ascii_lowercase();
@@ -709,6 +910,7 @@ fn api_get(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
         let def = service_of(&ctx.cfg, &a, &services::names())?;
         let path = api_path(a.text("path"))?;
         check_not_host_files(&path)?;
+        check_no_side_effect(def.name, &path)?;
         let q = params_of(&a, "query")?;
         match ctx.client.get(def.name, &path, &q).await {
             Ok(v) => {
@@ -747,6 +949,7 @@ pub fn tools(cfg: &Config) -> Vec<ToolDef> {
                 .desc("Page number from 1 (page size = limit)."),
             f_limit(cfg),
             f_fields(),
+            f_compact(),
         ]);
         v
     };
@@ -761,6 +964,7 @@ pub fn tools(cfg: &Config) -> Vec<ToolDef> {
                 string("resource").desc("Resource name from the service's whitelist (the error lists the allowed ones)."),
                 f_filters(),
                 f_fields(),
+                f_compact(),
                 f_limit(cfg),
                 f_offset(),
                 string("cursor").opt().desc("Tracearr only: cursor returned by the previous page."),
@@ -795,7 +999,7 @@ pub fn tools(cfg: &Config) -> Vec<ToolDef> {
             "arr_calendar",
             "Upcoming releases",
             format!("Episodes, movies or albums releasing between `start` and `end` (the service's own defaults when omitted: today and the next days). {cn}"),
-            vec![f_service("sonarr, radarr or lidarr."), string("start").opt().desc("First day, YYYY-MM-DD."), string("end").opt().desc("Last day, YYYY-MM-DD."), boolean("unmonitored").opt().desc("Include unmonitored items."), f_limit(cfg), f_fields()],
+            vec![f_service("sonarr, radarr or lidarr."), string("start").opt().desc("First day, YYYY-MM-DD."), string("end").opt().desc("Last day, YYYY-MM-DD."), boolean("unmonitored").opt().desc("Include unmonitored items."), f_limit(cfg), f_fields(), f_compact()],
             calendar,
         ),
         read(
@@ -812,6 +1016,7 @@ pub fn tools(cfg: &Config) -> Vec<ToolDef> {
                 f_limit(cfg),
                 f_offset(),
                 f_fields(),
+                f_compact(),
             ],
             releases,
         ),
@@ -892,6 +1097,34 @@ mod tests {
             writes: Mutex::new(vec![]),
         };
         (Arc::new(ctx), seen)
+    }
+
+    #[test]
+    fn compact_keeps_only_listed_keys_and_fields_wins() {
+        let a = args(json!({"compact": true}));
+        let f = fields_of(&a, "arr_list", "movie");
+        assert!(f.contains(&"title".to_string()) && !f.contains(&"overview".to_string()));
+        let movie = json!({"id": 1, "title": "T", "overview": "long", "images": [1, 2, 3]});
+        assert_eq!(pick(movie.clone(), &f), json!({"id": 1, "title": "T"}));
+        // `fields` explicite : prioritaire sur compact. Sans compact : rien n'est coupé. Ressource sans jeu : tout.
+        let b = args(json!({"compact": true, "fields": ["id"]}));
+        assert_eq!(fields_of(&b, "arr_list", "movie"), vec!["id".to_string()]);
+        assert!(fields_of(&args(json!({})), "arr_list", "movie").is_empty());
+        assert!(fields_of(&a, "arr_list", "tag").is_empty());
+    }
+
+    #[test]
+    fn api_get_refuses_host_listing_and_side_effects() {
+        // `manualimport?folder=` listait les fichiers de n'importe quel dossier de l'hôte (mesuré sur Sonarr 4.0.20).
+        for p in ["manualimport", "ManualImport", "manualimport/x"] {
+            assert!(check_not_host_files(p).is_err(), "{p}");
+        }
+        assert!(check_no_side_effect("prowlarr", "indexer/3/download").is_err());
+        assert!(check_no_side_effect("prowlarr", "Indexer/3/Newznab").is_err());
+        assert!(check_no_side_effect("tracearr", "events").is_err());
+        assert!(check_no_side_effect("prowlarr", "indexer/3").is_ok());
+        assert!(check_no_side_effect("sonarr", "indexer/3/download").is_ok());
+        assert!(check_no_side_effect("tracearr", "streams").is_ok());
     }
 
     #[test]

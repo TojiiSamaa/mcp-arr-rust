@@ -102,26 +102,52 @@ fn tool_json(def: &ToolDef, cfg: &Config) -> Value {
     })
 }
 
+/// Clés sous lesquelles une réponse porte ses lignes : à la racine (Tracearr `data`, pages `records`) ou dans
+/// `result` (outils `arr_list`, `arr_queue`... : `result.items` pour un tableau tranché, `result.records` pour
+/// une page du service).
+const ROW_KEYS: [&str; 4] = ["results", "records", "data", "items"];
+
+/// Chemin (`None` = racine, `Some("result")`) et clé de la liste à couper, si la réponse en a une de plus d'une ligne.
+fn rows_of(value: &Value) -> Option<(Option<&'static str>, &'static str)> {
+    let find = |v: &Value| {
+        ROW_KEYS.into_iter().find(|k| {
+            v.get(*k)
+                .and_then(Value::as_array)
+                .is_some_and(|r| r.len() > 1)
+        })
+    };
+    if let Some(k) = find(value) {
+        return Some((None, k));
+    }
+    value
+        .get("result")
+        .and_then(find)
+        .map(|k| (Some("result"), k))
+}
+
 /// Coupe des lignes plutôt que du texte, pour que la réponse reste valide et que la pagination continue.
-/// Les listes *arr sont des tableaux nus ou des pages `records` ; Tracearr répond `data`.
+/// Les listes *arr sont des tableaux nus ou des pages `records` ; Tracearr répond `data` ; les outils de liste
+/// les rangent dans `result` (sans cette descente, une page trop grosse n'était qu'un aperçu de JSON coupé).
 pub fn render_result(value: &Value, max_chars: usize, offset: usize) -> String {
     let text = value.to_string();
     let len = text.chars().count();
     if len <= max_chars {
         return text;
     }
-    let key = ["results", "records", "data"].into_iter().find(|k| {
-        value
-            .get(*k)
-            .and_then(Value::as_array)
-            .is_some_and(|r| r.len() > 1)
-    });
-    if let Some(key) = key {
-        let rows = value[key].as_array().cloned().unwrap_or_default();
+    if let Some((parent, key)) = rows_of(value) {
+        let list = |v: &Value| match parent {
+            Some(p) => v[p][key].clone(),
+            None => v[key].clone(),
+        };
+        let rows = list(value).as_array().cloned().unwrap_or_default();
         let mut keep = rows.len() * max_chars / len;
         while keep > 0 {
             let mut candidate = value.clone();
-            candidate[key] = Value::Array(rows[..keep].to_vec());
+            let slot = match parent {
+                Some(p) => &mut candidate[p],
+                None => &mut candidate,
+            };
+            slot[key] = Value::Array(rows[..keep].to_vec());
             candidate["has_more"] = json!(true);
             candidate["next_offset"] = json!(offset + keep);
             candidate["truncated"] = json!(format!("Cut to {keep} rows to fit the size limit. Continue with offset={}, narrow the filters, or use `fields`.", offset + keep));
@@ -535,6 +561,25 @@ mod tests {
             parsed["next_offset"],
             10 + parsed["records"].as_array().unwrap().len()
         );
+    }
+
+    #[test]
+    fn render_cuts_rows_nested_in_result() {
+        // Forme de `arr_list` : les lignes sont dans `result.items`. Avant, aucun découpage : aperçu de JSON coupé.
+        let rows: Vec<Value> = (0..200)
+            .map(|i| json!({ "id": i, "pad": "xxxxxxxxxxxxxxxxxxxx" }))
+            .collect();
+        let v =
+            json!({ "service": "sonarr", "result": { "total": 200, "offset": 0, "items": rows } });
+        let s = render_result(&v, 2000, 0);
+        let parsed: Value = serde_json::from_str(&s).unwrap();
+        assert!(s.chars().count() <= 2000);
+        assert!(parsed.get("preview").is_none(), "must cut rows, not text");
+        assert_eq!(parsed["has_more"], true);
+        let kept = parsed["result"]["items"].as_array().unwrap().len();
+        assert!(kept > 1 && kept < 200);
+        assert_eq!(parsed["next_offset"], kept);
+        assert_eq!(parsed["result"]["total"], 200);
     }
 
     #[test]

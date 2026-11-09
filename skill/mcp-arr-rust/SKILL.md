@@ -40,7 +40,7 @@ Level: **read** = always allowed; **write** = needs `ARR_ALLOW_WRITES=true` (acc
 
 ### Reads
 
-All read tools accept `fields` (keep only these keys) and, when they return lists, `limit` (capped by `ARR_MAX_LIMIT`, default 100). `service` is one of `sonarr|radarr|lidarr|prowlarr|tracearr`.
+All read tools accept `fields` (keep only these keys); the list tools (`arr_list`, `arr_queue`, `arr_history`, `arr_wanted`, `arr_calendar`, `arr_releases`) also accept `compact: true` (a built-in set of useful keys, 5 to 10 times smaller; `fields` wins when both are given). Lists accept `limit` (capped by `ARR_MAX_LIMIT`, default 100). `service` is one of `sonarr|radarr|lidarr|prowlarr|tracearr`.
 
 - `arr_status` `{}`. Example: `arr_status {}`.
 - `arr_list` `{service, resource, filters?, fields?, limit?, offset?, cursor?, pageSize?}`. `resource` is whitelisted per service: `series`, `episode` (sonarr); `movie` (radarr); `artist`, `album` (lidarr); `qualityprofile`, `tag`, `rootfolder`, `indexer`, `downloadclient`, `customformat`, `naming`... ; Tracearr: `streams`, `history`, `violations`, `servers`, `users`, `libraries`, `recently-added`, `watched-media`, `top-media`, `stats`. Keep `offset` a multiple of `limit`. Episodes and albums need a filter such as `{"seriesId":3}` or `{"artistId":7}`. Tracearr pages with `cursor` (`result.meta.nextCursor` of the previous answer, `null` on the last page) and `pageSize` (max 100); `watched-media` needs `filters.media_type` (`movie`, `show` or `episode`) and `top-media` too (`movie` or `show`). Example: `arr_list {"service":"sonarr","resource":"series","fields":["id","title","monitored"],"limit":20}`.
@@ -53,7 +53,7 @@ All read tools accept `fields` (keep only these keys) and, when they return list
 - `arr_releases` `{service, movieId | episodeId | (seriesId + seasonNumber) | albumId, limit?, offset?, fields?}`. Live indexer search: slow and large, so set `fields` (`guid,title,indexerId,quality,size,seeders,rejections`) and `limit`. It grabs nothing. Example: `arr_releases {"service":"radarr","movieId":42,"fields":["guid","title","indexerId","rejections"],"limit":20}`.
 - `arr_command_status` `{service, id?, limit?, fields?}`; without `id` lists recent commands. Example: `arr_command_status {"service":"sonarr","id":1234}`.
 - `arr_search_indexers` `{service:"prowlarr", query, type?, indexerIds?, categories?, limit?, offset?, fields?}`; `type` is `search|tvsearch|movie|music|book`. Example: `arr_search_indexers {"service":"prowlarr","query":"example title","type":"movie"}`.
-- `arr_api_get` `{service, path, query?, limit?, offset?, fields?}`. `path` is relative to the API prefix: no `/api/v3`, no `..`, no `?` (filters go in `query`). Prefer a dedicated tool first. Paths that read files on the service host (`filesystem`, `system/backup`, `log/file`, `mediacover`, any case) are refused with `resource_not_allowed` before any request. Example: `arr_api_get {"service":"sonarr","path":"series/3/folder"}`.
+- `arr_api_get` `{service, path, query?, limit?, offset?, fields?}`. `path` is relative to the API prefix: no `/api/v3`, no `..`, no `?` (filters go in `query`). Prefer a dedicated tool first. Paths that read files on the service host (`filesystem`, `system/backup`, `log/file`, `mediacover`, `manualimport`, any case) are refused with `resource_not_allowed` before any request. Example: `arr_api_get {"service":"sonarr","path":"series/3/folder"}`.
 - `arr_stats` `{}`: see section Stats.
 
 ### Writes (need `ARR_ALLOW_WRITES`; accept `dry_run: true`)

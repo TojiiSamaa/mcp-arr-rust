@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Mise en prod SORTANTE de arrmcp : c'est l'hôte qui tire l'image, rien n'est poussé vers lui (aucun port entrant,
 # aucun secret de déploiement). Lancé par deploy/pull-deploy.timer.
-#   1. tire IMAGE:prod (publiée par ghcr-publication.yml après tests verts sur main) et lit son digest ;
+#   1. tire IMAGE:$TAG (latest par défaut ; publié par release-arr.yml avec le tag de version, à la release) et lit son digest ;
 #   2. si c'est le digest déjà en service et sain : ne fait rien ;
 #   3. sinon mémorise le digest en service (previous), relance le service sur le nouveau digest ;
 #   4. contrôle de santé (N essais) : GET /health, puis requête MCP `initialize` si ARR_MCP_TOKEN est fourni ;
@@ -11,7 +11,8 @@
 set -uo pipefail
 
 IMAGE="${IMAGE:-ghcr.io/tojiisamaa/mcp-arr-rust}"
-COMPOSE_FILE="${COMPOSE_FILE:-/opt/arrmcp/docker-compose.yml}"   # doit contenir : image: ${ARR_IMAGE:-ghcr.io/tojiisamaa/mcp-arr-rust:prod}
+TAG="${TAG:-latest}"                                              # tag suivi ; épingler une version : TAG=1.1.0
+COMPOSE_FILE="${COMPOSE_FILE:-/opt/arrmcp/docker-compose.yml}"   # doit contenir : image: ${ARR_IMAGE:-ghcr.io/tojiisamaa/mcp-arr-rust:latest}
 SERVICE="${SERVICE:-arrmcp}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8000/health}"         # /health : {"status":"ok"} sans jeton
 MCP_URL="${MCP_URL:-http://127.0.0.1:8000/mcp}"                  # contrôlé seulement si ARR_MCP_TOKEN est dans l'environnement
@@ -57,7 +58,7 @@ current_ref() {
 }
 
 if [ "$A_BLANC" = 1 ]; then
-  log "À BLANC : tirerait $IMAGE:prod, comparerait son digest à $(cat "$STATE_DIR/current" 2>/dev/null || echo '(aucun état)')"
+  log "À BLANC : tirerait $IMAGE:$TAG, comparerait son digest à $(cat "$STATE_DIR/current" 2>/dev/null || echo '(aucun état)')"
   log "À BLANC : si différent, relancerait $SERVICE ($COMPOSE_FILE) puis testerait $HEALTH_URL ($HEALTH_TRIES essais)"
   log "À BLANC : en cas d'échec, relancerait le digest précédent (rollback). Rien n'a été exécuté."
   exit 0
@@ -67,9 +68,9 @@ mkdir -p "$STATE_DIR" || { echo "STATE_DIR inaccessible" >&2; exit 4; }
 exec 9>"$STATE_DIR/lock"
 flock -n 9 || { log "un autre déploiement est en cours"; exit 0; }
 
-docker pull "$IMAGE:prod" >/dev/null || { log "pull de $IMAGE:prod impossible"; exit 4; }
-repo_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:prod" 2>/dev/null)"
-case "$repo_digest" in *@sha256:*) ;; *) log "digest de $IMAGE:prod illisible"; exit 4 ;; esac
+docker pull "$IMAGE:$TAG" >/dev/null || { log "pull de $IMAGE:$TAG impossible"; exit 4; }
+repo_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$TAG" 2>/dev/null)"
+case "$repo_digest" in *@sha256:*) ;; *) log "digest de $IMAGE:$TAG illisible"; exit 4 ;; esac
 new="$IMAGE@${repo_digest#*@}"
 cur="$(current_ref)"
 

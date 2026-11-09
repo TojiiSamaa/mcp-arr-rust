@@ -1,6 +1,6 @@
 # Exemple : /etc/systemd/system/arrmcp-pull-deploy.service (à installer par Toji sur l'hôte de prod).
 [Unit]
-Description=arrmcp : tirer :prod, relancer, contrôler la santé, rollback si échec
+Description=arrmcp : tirer :latest, relancer, contrôler la santé, rollback si échec
 After=docker.service network-online.target
 Wants=network-online.target
 

@@ -47,6 +47,10 @@ const SONARR: &[(&str, &str)] = &[
     ("naming", "config/naming"),
     ("mediamanagement", "config/mediamanagement"),
     ("diskspace", "diskspace"),
+    ("importlistexclusion", "importlistexclusion"),
+    ("remotepathmapping", "remotepathmapping"),
+    ("task", "system/task"),
+    ("update", "update"),
 ];
 
 const RADARR: &[(&str, &str)] = &[
@@ -68,6 +72,9 @@ const RADARR: &[(&str, &str)] = &[
     ("naming", "config/naming"),
     ("mediamanagement", "config/mediamanagement"),
     ("diskspace", "diskspace"),
+    ("remotepathmapping", "remotepathmapping"),
+    ("task", "system/task"),
+    ("update", "update"),
 ];
 
 const LIDARR: &[(&str, &str)] = &[
@@ -90,6 +97,10 @@ const LIDARR: &[(&str, &str)] = &[
     ("naming", "config/naming"),
     ("mediamanagement", "config/mediamanagement"),
     ("diskspace", "diskspace"),
+    ("importlistexclusion", "importlistexclusion"),
+    ("remotepathmapping", "remotepathmapping"),
+    ("task", "system/task"),
+    ("update", "update"),
 ];
 
 const PROWLARR: &[(&str, &str)] = &[
@@ -101,6 +112,9 @@ const PROWLARR: &[(&str, &str)] = &[
     ("downloadclient", "downloadclient"),
     ("notification", "notification"),
     ("tag", "tag"),
+    ("indexerstatus", "indexerstatus"),
+    ("task", "system/task"),
+    ("update", "update"),
 ];
 
 const TRACEARR: &[(&str, &str)] = &[
@@ -113,7 +127,6 @@ const TRACEARR: &[(&str, &str)] = &[
     ("recently-added", "recently-added"),
     ("watched-media", "watched-media"),
     ("top-media", "top-media"),
-    ("media", "media"),
     ("stats", "stats"),
 ];
 
@@ -171,7 +184,7 @@ pub static SERVICES: [ServiceDef; 5] = [
         key_env: "TRACEARR_API_KEY",
         resources: TRACEARR,
         v1_prefix: Some("/api/v1/public"),
-        v1_paths: &["stats", "streams/*/terminate"],
+        v1_paths: &["stats", "streams/*/terminate", "activity", "health"],
     },
 ];
 
@@ -184,7 +197,7 @@ pub fn names() -> Vec<&'static str> {
 }
 
 /// `motif` couvre-t-il `path` ? Comparaison par segments, `*` = un segment quelconque, le motif est un préfixe.
-fn pattern_covers(pattern: &str, path: &str) -> bool {
+pub(crate) fn pattern_covers(pattern: &str, path: &str) -> bool {
     let (p, s): (Vec<&str>, Vec<&str>) = (pattern.split('/').collect(), path.split('/').collect());
     p.len() <= s.len() && p.iter().zip(&s).all(|(a, b)| *a == "*" || a == b)
 }
@@ -231,6 +244,13 @@ mod tests {
             Some("config/naming")
         );
         assert!(get("radarr").unwrap().resource("series").is_none());
+        assert_eq!(get("lidarr").unwrap().resource("task"), Some("system/task"));
+        assert_eq!(
+            get("prowlarr").unwrap().resource("indexerstatus"),
+            Some("indexerstatus")
+        );
+        // Tracearr n'a pas de liste `media` (404 mesuré sur 3.1.7) : retirée de la liste blanche.
+        assert!(get("tracearr").unwrap().resource("media").is_none());
         assert!(get("readarr").is_none());
     }
 
@@ -242,6 +262,8 @@ mod tests {
         assert_eq!(t.prefix_for("streams/abc/terminate"), "/api/v1/public");
         assert_eq!(t.prefix_for("streams"), "/api/v2/public");
         assert_eq!(t.prefix_for("statsx"), "/api/v2/public");
+        assert_eq!(t.prefix_for("activity"), "/api/v1/public");
+        assert_eq!(t.prefix_for("health"), "/api/v1/public");
         assert_eq!(get("sonarr").unwrap().prefix_for("stats"), "/api/v3");
     }
 }

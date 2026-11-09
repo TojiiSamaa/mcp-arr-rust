@@ -1,4 +1,11 @@
-# arrmcp (mcp-arr-rust)
+<p align="center">
+  <img src="assets/discord-apercu.png" alt="mcp-arr-rust" width="720">
+</p>
+
+<h1 align="center">mcp-arr-rust</h1>
+
+<p align="center"><code>arrmcp</code> : Sonarr, Radarr, Lidarr, Prowlarr et Tracearr depuis Claude.</p>
+
 
 **Français, en bref.** Serveur MCP en Rust pour Sonarr, Radarr, Lidarr, Prowlarr et Tracearr (22 outils `arr_*`). Fermé par défaut : lecture seule tant que `ARR_ALLOW_WRITES` / `ARR_ALLOW_DELETE` ne sont pas activés ; confirmation humaine pour les actions destructives ; mode test (`--test`) qui ne contacte rien de réel. Le skill pour les agents est dans `skill/mcp-arr-rust/SKILL.md`. Portage de [mcp-arr](https://github.com/aplaceforallmystuff/mcp-arr) (MIT) ; les outils TRaSH ne sont pas portés.
 

@@ -170,8 +170,11 @@ async fn serve_stdio(registry: Arc<Registry>) {
             }
         }
     });
-    // Un appel fait au plus une lecture puis une écriture, chacune bornée par ARR_TIMEOUT.
-    let drain = std::time::Duration::from_secs(registry.runtime.cfg.timeout_secs * 2 + 5);
+    // Un appel fait au plus une lecture puis une écriture, chacune bornée par ARR_TIMEOUT
+    // (ARR_SEARCH_TIMEOUT pour une recherche live, si elle est plus longue).
+    let cfg = &registry.runtime.cfg;
+    let longest = cfg.timeout_secs.max(cfg.search_timeout_secs);
+    let drain = std::time::Duration::from_secs(longest * 2 + 5);
     let session = Session::new(registry, Some(tx.clone()));
     let mut tasks = tokio::task::JoinSet::new();
     arrmcp::log::info("ready on stdio");

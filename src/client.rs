@@ -14,6 +14,13 @@ use std::time::Duration;
 /// Réexporté pour que le reste du code n'ait pas à citer `reqwest`.
 pub use reqwest::Method;
 
+/// Délai de connexion : fixe, aucune variable ne le règle.
+const CONNECT_TIMEOUT_SECS: u64 = 10;
+
+/// Le client MCP a son propre délai, distinct de ceux d'arrmcp : un délai plus court coupe l'appel avant la réponse.
+const CLIENT_TIMEOUT_NOTE: &str =
+    "The MCP client has its own timeout, separate from arrmcp's: keep it at least as long.";
+
 /// Réponse simulée : (service, méthode, chemin complet `/api/v3/series/1`, requête, corps).
 pub type MockFn = Arc<
     dyn Fn(&str, &Method, &str, &[(String, String)], Option<&Value>) -> Result<Value> + Send + Sync,
@@ -112,7 +119,7 @@ impl Client {
                     .danger_accept_invalid_certs(!cfg.verify_ssl)
                     .redirect(reqwest::redirect::Policy::none())
                     .timeout(Duration::from_secs(cfg.timeout_secs))
-                    .connect_timeout(Duration::from_secs(10))
+                    .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
                     .user_agent(concat!("arrmcp/", env!("CARGO_PKG_VERSION")))
                     .build()
                     .map_err(|e| {
@@ -215,8 +222,10 @@ impl Client {
         }
         let def = services::get(service).ok_or_else(|| unknown_service(service))?;
         let url = format!("{base}{full}");
+        let limit = total_limit(&self.cfg, &method, full);
         let mut req = http
             .request(method.clone(), &url)
+            .timeout(Duration::from_secs(limit.0))
             .header("Accept", "application/json")
             .query(query);
         req = match def.auth {
@@ -226,7 +235,10 @@ impl Client {
         if let Some(b) = body {
             req = req.json(b);
         }
-        let resp = req.send().await.map_err(|e| transport_error(&e, service))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| transport_error(&e, service, limit))?;
         let status = resp.status();
         let location = resp
             .headers()
@@ -236,7 +248,7 @@ impl Client {
         let text = resp
             .text()
             .await
-            .map_err(|e| transport_error(&e, service))?;
+            .map_err(|e| transport_error(&e, service, limit))?;
         if status.is_redirection() {
             let env = def.url_env;
             return Err(ArrError::new(ErrorType::BadResponse, format!("{service} redirected the request to {}.", location.as_deref().unwrap_or("another address")))
@@ -263,14 +275,46 @@ impl Client {
     }
 }
 
-fn transport_error(e: &reqwest::Error, service: &str) -> ArrError {
+/// Recherche live : le service interroge les indexeurs avant de répondre (`GET release`, `GET search` de Prowlarr).
+fn is_live_search(method: &Method, full: &str) -> bool {
+    *method == Method::GET && (full.ends_with("/release") || full.ends_with("/search"))
+}
+
+/// Délai total d'une requête (secondes) et variable qui le fixe : ARR_TIMEOUT, sauf pour une recherche live qui prend
+/// le plus grand d'ARR_TIMEOUT et d'ARR_SEARCH_TIMEOUT (0 = ARR_TIMEOUT seul).
+fn total_limit(cfg: &Config, method: &Method, full: &str) -> (u64, &'static str) {
+    if is_live_search(method, full) && cfg.search_timeout_secs >= cfg.timeout_secs {
+        (cfg.search_timeout_secs, "ARR_SEARCH_TIMEOUT")
+    } else {
+        (cfg.timeout_secs, "ARR_TIMEOUT")
+    }
+}
+
+/// Dit quel délai a sauté (connexion fixe, ou durée totale et sa variable) : « élever ARR_TIMEOUT » ne sert à rien
+/// si le client MCP coupe avant.
+fn timeout_error(service: &str, connecting: bool, (secs, var): (u64, &str)) -> ArrError {
+    let (limit, advice) = if connecting {
+        (
+            format!("connection limit {CONNECT_TIMEOUT_SECS} s, not configurable"),
+            format!("Check that {service} is up and reachable."),
+        )
+    } else {
+        (
+            format!("total limit {secs} s, set by {var}"),
+            format!("Raise {var}, or narrow the query."),
+        )
+    };
+    ArrError::new(
+        ErrorType::Timeout,
+        format!("{service} did not answer in time ({limit})."),
+    )
+    .hint(format!("{advice} {CLIENT_TIMEOUT_NOTE}"))
+}
+
+fn transport_error(e: &reqwest::Error, service: &str, limit: (u64, &str)) -> ArrError {
     let msg = format!("{e:?}");
     if e.is_timeout() {
-        ArrError::new(
-            ErrorType::Timeout,
-            format!("{service} did not answer in time."),
-        )
-        .hint("Raise ARR_TIMEOUT, or narrow the query.")
+        timeout_error(service, e.is_connect(), limit)
     } else if msg.to_ascii_lowercase().contains("certificate") {
         ArrError::new(ErrorType::TlsError, "TLS certificate check failed.")
             .hint("Fix the certificate, or set VERIFY_SSL=false for a lab (insecure).")
@@ -426,6 +470,45 @@ mod tests {
                 ("ok".into(), "true".into())
             ]
         );
+    }
+
+    /// Issue #6 : une recherche live a son délai total, jamais sous ARR_TIMEOUT ; 0 = l'ancien comportement.
+    #[test]
+    fn live_searches_have_their_own_total_limit() {
+        for (method, path, live) in [
+            (Method::GET, "/api/v3/release", true),
+            (Method::GET, "/api/v1/search", true),
+            (Method::POST, "/api/v3/release", false),
+            (Method::GET, "/api/v3/release/push", false),
+            (Method::GET, "/api/v3/series/lookup", false),
+        ] {
+            assert_eq!(is_live_search(&method, path), live, "{method} {path}");
+        }
+        let get = |c: &Config, path: &str| total_limit(c, &Method::GET, path);
+        let c = cfg(&[]);
+        assert_eq!(get(&c, "/api/v3/release"), (120, "ARR_SEARCH_TIMEOUT"));
+        assert_eq!(get(&c, "/api/v3/series"), (30, "ARR_TIMEOUT"));
+        // Jamais en dessous d'ARR_TIMEOUT.
+        let c = cfg(&[("ARR_TIMEOUT", "300")]);
+        assert_eq!(get(&c, "/api/v3/release"), (300, "ARR_TIMEOUT"));
+        // 0 : l'ancien comportement.
+        let c = cfg(&[("ARR_SEARCH_TIMEOUT", "0")]);
+        assert_eq!(get(&c, "/api/v3/release"), (30, "ARR_TIMEOUT"));
+    }
+
+    /// Un délai dépassé dit lequel, sa valeur et sa variable ; la connexion n'en a pas.
+    #[test]
+    fn a_timeout_names_its_limit() {
+        let total = timeout_error("sonarr", false, (120, "ARR_SEARCH_TIMEOUT"));
+        let m = &total.message;
+        assert!(m.starts_with("sonarr did not answer in time"));
+        assert!(m.contains("total limit 120 s, set by ARR_SEARCH_TIMEOUT"));
+        let connect = timeout_error("sonarr", true, (120, "ARR_SEARCH_TIMEOUT"));
+        assert!(connect.message.contains("connection limit 10 s"));
+        for e in [&total, &connect] {
+            assert!(e.is(ErrorType::Timeout));
+            assert!(e.hint.as_deref().unwrap().contains("MCP client"));
+        }
     }
 
     #[test]

@@ -91,7 +91,8 @@ Server (all closed or conservative by default):
 | `ARR_AUDIT_LOG` | Path of the write audit log |
 | `ARR_MAX_LIMIT`, `ARR_MAX_RESPONSE_CHARS` | Page and answer caps |
 | `ARR_REDACT_SECRETS` | Mask secrets (keys, passwords, tokens, webhooks) in answers, dry-run previews, error details and the audit log (default true) |
-| `ARR_TIMEOUT` | Request timeout in seconds (default 30); on stdio end of input, running calls get `2 × ARR_TIMEOUT + 5` s to answer |
+| `ARR_TIMEOUT` | Request timeout in seconds (default 30); on stdio end of input, running calls get `2 × max(ARR_TIMEOUT, ARR_SEARCH_TIMEOUT) + 5` s to answer |
+| `ARR_SEARCH_TIMEOUT` | Timeout in seconds for live indexer searches (`arr_releases`, `arr_search_indexers`), which wait for the indexers (default 120). A search gets the larger of this and `ARR_TIMEOUT`; `0` keeps `ARR_TIMEOUT` alone. The MCP client has its own timeout, separate from these: keep it at least as long |
 | `VERIFY_SSL`, `LOG_LEVEL`, `CORS_ORIGINS` | TLS verification, logging, CORS |
 | `ARR_TEST_MODE`, `ARR_TEST_APPROVER`, `ARR_STATS_FILE` | See Test mode |
 

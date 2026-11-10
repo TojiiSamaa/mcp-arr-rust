@@ -92,6 +92,11 @@ async fn fake(
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             reply(StatusCode::OK, json!([]))
         }
+        // Recherche live (GET release) : les indexeurs mettent plus de 2 s à répondre.
+        "release" => {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            reply(StatusCode::OK, json!([item(1)]))
+        }
         // Formes de secrets des *arr : champs de réglage d'un indexeur, d'une notification, configuration de l'hôte.
         "7" if path.ends_with("/indexer/7") => reply(
             StatusCode::OK,

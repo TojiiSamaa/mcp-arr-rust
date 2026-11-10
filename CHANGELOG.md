@@ -4,16 +4,22 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-10
+
+### Added
+- `ARR_SEARCH_TIMEOUT` (seconds, default 120): live indexer searches (`arr_releases`, `arr_search_indexers`) get the larger of it and `ARR_TIMEOUT` instead of failing after 30 s when the indexers need longer; `0` keeps `ARR_TIMEOUT` for them. The stdio drain at end of input follows the larger of the two (#6).
+
+### Fixed
+- A `timeout` error now states its limit in seconds, the variable that sets it and the phase (connection, fixed at 10 s, or total time); its hint says the MCP client has its own timeout, separate from arrmcp's, to keep at least as long (#6).
+
 ## [1.1.0] - 2026-11-10
 
 ### Added
 - `deploy/` kit for pull-based deployment: `pull-deploy.sh` pulls `ghcr.io/tojiisamaa/mcp-arr-rust:latest` (`TAG=x.y.z` pins a version), does nothing when the running digest is current and healthy, checks `/health` (and an MCP `initialize` when `ARR_MCP_TOKEN` is set) after the swap and rolls back to the previous digest on failure; systemd timer and service, compose example, `--a-blanc` dry run.
 - `compact: true` on `arr_list`, `arr_queue`, `arr_history`, `arr_wanted`, `arr_calendar` and `arr_releases`: keeps the useful keys only (explicit `fields` still win). Measured on synthetic 5 000-item libraries: 58 KB to 5 KB for movies, 66 KB to 8.7 KB for the queue.
 - Read-only resources: `remotepathmapping`, `task` (`system/task`), `update` on the four *arr; `importlistexclusion` on Sonarr, Lidarr and Prowlarr; `indexerstatus` on Prowlarr. Tracearr `activity` and `health` are routed to the v1 API.
-- `ARR_SEARCH_TIMEOUT` (seconds, default 120): live indexer searches (`arr_releases`, `arr_search_indexers`) get the larger of it and `ARR_TIMEOUT` instead of failing after 30 s when the indexers need longer; `0` keeps `ARR_TIMEOUT` for them. The stdio drain at end of input follows the larger of the two (#6).
 
 ### Fixed
-- A `timeout` error now states its limit in seconds, the variable that sets it and the phase (connection, fixed at 10 s, or total time); its hint says the MCP client has its own timeout, separate from arrmcp's, to keep at least as long (#6).
 - Oversized answers whose rows sit under `result.items` / `result.records` were cut as raw text; they are now cut by rows with `has_more` / `next_offset`.
 - `arr_api_get` refuses `manualimport` (lists files of any host folder), Prowlarr `indexer/*/download` and `indexer/*/newznab` (side effects) and the Tracearr `events` stream (never ends).
 - Removed the Tracearr `media` list (404 on 3.1.7).

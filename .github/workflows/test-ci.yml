@@ -13,8 +13,10 @@ on:
 permissions:
   contents: read
 
+# `github.workflow` vaut le nom de l'appelant dans un workflow appelé : la release (qui appelle ce fichier sur la
+# même ref que le push de la fusion) n'attend plus la fin du Test CI de main.
 concurrency:
-  group: test-ci-${{ github.ref }}
+  group: test-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

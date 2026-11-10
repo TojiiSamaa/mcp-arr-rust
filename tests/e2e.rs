@@ -858,3 +858,55 @@ async fn api_get_refuses_host_file_access_before_any_request() {
     .await;
     assert!(!err, "{v}");
 }
+
+fn season_search() -> Value {
+    json!({ "service": "sonarr", "seriesId": 1, "seasonNumber": 1 })
+}
+
+/// Issue #6 : une recherche live lente (GET release, 2 s ici) dépasse ARR_TIMEOUT mais tient dans ARR_SEARCH_TIMEOUT.
+#[tokio::test]
+async fn a_live_search_may_outlast_arr_timeout() {
+    let (s, log) = start(&[("ARR_TIMEOUT", "1"), ("ARR_SEARCH_TIMEOUT", "5")]).await;
+    let (err, v) = call(&s, "arr_releases", season_search()).await;
+    assert!(!err, "{v}");
+    assert_eq!(v["result"]["returned"], 1, "{v}");
+    let gets = sent(&log, "GET");
+    assert_eq!(gets.len(), 1, "{gets:?}");
+    assert_eq!(gets[0].path, "/api/v3/release");
+    assert!(gets[0].query.contains("seasonNumber=1"), "{gets:?}");
+}
+
+/// Quand le délai d'une recherche live est dépassé, l'erreur dit la valeur, la variable et la phase ; une seule requête part.
+#[tokio::test]
+async fn a_live_search_timeout_names_its_limit_and_variable() {
+    let (s, log) = start(&[("ARR_TIMEOUT", "1"), ("ARR_SEARCH_TIMEOUT", "1")]).await;
+    let (err, v) = call(&s, "arr_releases", season_search()).await;
+    assert!(err && v["error_type"] == "timeout", "{v}");
+    let msg = v["error"].as_str().unwrap();
+    assert!(msg.starts_with("sonarr did not answer in time"), "{v}");
+    assert!(
+        msg.contains("total limit 1 s") && msg.contains("ARR_SEARCH_TIMEOUT"),
+        "{v}"
+    );
+    assert!(v["hint"].as_str().unwrap().contains("MCP client"), "{v}");
+    assert_eq!(sent(&log, "GET").len(), 1, "aucun nouvel essai");
+}
+
+/// ARR_SEARCH_TIMEOUT ne rallonge que les recherches live : un autre GET lent garde ARR_TIMEOUT.
+#[tokio::test]
+async fn arr_search_timeout_does_not_extend_other_calls() {
+    let (s, _) = start(&[("ARR_TIMEOUT", "1"), ("ARR_SEARCH_TIMEOUT", "5")]).await;
+    let started = std::time::Instant::now();
+    let (err, v) = call(
+        &s,
+        "arr_api_get",
+        json!({ "service": "sonarr", "path": "slow" }),
+    )
+    .await;
+    assert!(err && v["error_type"] == "timeout", "{v}");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(3),
+        "{:?}",
+        started.elapsed()
+    );
+}

@@ -60,6 +60,9 @@ pub struct Config {
     pub services: Vec<ServiceConf>,
     pub verify_ssl: bool,
     pub timeout_secs: u64,
+    /// Délai total d'une recherche live (GET release, GET search), en secondes (ARR_SEARCH_TIMEOUT, défaut 120) :
+    /// elle prend le plus grand de cette valeur et d'ARR_TIMEOUT ; 0 = ARR_TIMEOUT seul.
+    pub search_timeout_secs: u64,
     pub allow_writes: bool,
     pub allow_delete: bool,
     pub dry_run: bool,
@@ -204,6 +207,7 @@ pub fn load_config(env: &Env) -> Result<Config> {
         services: read_services(env, test_mode)?,
         verify_ssl: flag(env, "VERIFY_SSL", true)?,
         timeout_secs: number(env, "ARR_TIMEOUT", 30)?,
+        search_timeout_secs: number(env, "ARR_SEARCH_TIMEOUT", 120)?,
         allow_writes: flag(env, "ARR_ALLOW_WRITES", false)?,
         allow_delete: flag(env, "ARR_ALLOW_DELETE", false)?,
         dry_run: flag(env, "ARR_DRY_RUN", false)?,
@@ -275,6 +279,7 @@ mod tests {
         assert!(c.redact && c.verify_ssl && c.mcp_token.is_none());
         assert_eq!(c.elicit, Elicit::Destructive);
         assert_eq!(c.elicit_timeout_secs, 120);
+        assert_eq!((c.timeout_secs, c.search_timeout_secs), (30, 120));
         assert_eq!(c.test_approver, Approver::Deny);
     }
 

@@ -50,7 +50,7 @@ All read tools accept `fields` (keep only these keys); the list tools (`arr_list
 - `arr_history` `{service, filters?, page?, limit?, fields?}`. Example: `arr_history {"service":"radarr","filters":{"movieId":42}}`.
 - `arr_wanted` `{service, kind:"missing"|"cutoff", filters?, page?, limit?, fields?}`. Example: `arr_wanted {"service":"radarr","kind":"cutoff"}`.
 - `arr_calendar` `{service, start?, end?, unmonitored?, limit?, fields?}` (ISO dates). Example: `arr_calendar {"service":"sonarr","start":"2026-01-01","end":"2026-01-07"}`.
-- `arr_releases` `{service, movieId | episodeId | (seriesId + seasonNumber) | albumId, limit?, offset?, fields?}`. Live indexer search: slow and large, so set `fields` (`guid,title,indexerId,quality,size,seeders,rejections`) and `limit`. It grabs nothing. Example: `arr_releases {"service":"radarr","movieId":42,"fields":["guid","title","indexerId","rejections"],"limit":20}`.
+- `arr_releases` `{service, movieId | episodeId | (seriesId + seasonNumber) | albumId, limit?, offset?, fields?}`. Live indexer search: slow (it may last up to `ARR_SEARCH_TIMEOUT`, 120 s by default) and large, so set `fields` (`guid,title,indexerId,quality,size,seeders,rejections`) and `limit`. It grabs nothing. Example: `arr_releases {"service":"radarr","movieId":42,"fields":["guid","title","indexerId","rejections"],"limit":20}`.
 - `arr_command_status` `{service, id?, limit?, fields?}`; without `id` lists recent commands. Example: `arr_command_status {"service":"sonarr","id":1234}`.
 - `arr_search_indexers` `{service:"prowlarr", query, type?, indexerIds?, categories?, limit?, offset?, fields?}`; `type` is `search|tvsearch|movie|music|book`. Example: `arr_search_indexers {"service":"prowlarr","query":"example title","type":"movie"}`.
 - `arr_api_get` `{service, path, query?, limit?, offset?, fields?}`. `path` is relative to the API prefix: no `/api/v3`, no `..`, no `?` (filters go in `query`). Prefer a dedicated tool first. Paths that read files on the service host (`filesystem`, `system/backup`, `log/file`, `mediacover`, `manualimport`, any case) are refused with `resource_not_allowed` before any request. Example: `arr_api_get {"service":"sonarr","path":"series/3/folder"}`.
@@ -148,7 +148,7 @@ Same pattern for movies and artists.
 | `confirmation_required` | Client cannot be asked, or nobody answered within `ARR_ELICIT_TIMEOUT` | Use a client with elicitation, or the operator enables the documented fallback `ARR_CONFIRM_ARG`. |
 | `resource_not_allowed` | Resource outside the whitelist, or a host-file endpoint in `arr_api_get` | Final: do not retry. |
 | 401/403 from the service | Wrong API key | Check the key, not the URL. |
-| timeout | `arr_releases` or a slow indexer | Raise `ARR_TIMEOUT`; retry once. |
+| timeout | `arr_releases`, `arr_search_indexers` or a slow indexer | The error names the limit and the variable that sets it: `ARR_SEARCH_TIMEOUT` for live searches, `ARR_TIMEOUT` otherwise. Raise it and keep the MCP client's own timeout at least as long; retry once. |
 | `found:false` | Not an error: the object does not exist | Re-check the id or search by name. |
 | `TEST_MODE_EGRESS_BLOCKED` | Something tried to leave the mock in test mode | Expected; see Mode test. |
 | truncated answer | `ARR_MAX_RESPONSE_CHARS` / `ARR_MAX_LIMIT` | Use `fields`, `limit`, `offset`. |

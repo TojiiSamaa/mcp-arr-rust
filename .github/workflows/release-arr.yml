@@ -23,11 +23,15 @@ concurrency:
 
 jobs:
   # Les mêmes contrôles que Test CI (format, clippy, tests, preuves A/B, audit, contrat) ; un échec bloque tout.
+  # test-ci.yml contient le job `fusion-auto` (contents + pull-requests: write, jamais exécuté ici) : un workflow appelé
+  # ne peut pas dépasser les droits de l'appelant, sans ces deux lignes l'appel est refusé au démarrage. Les autres
+  # jobs restent en `contents: read` (droit par défaut de test-ci.yml).
   checks:
     name: Checks
     uses: ./.github/workflows/test-ci.yml
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
 
   prepare:
     name: Resolve version and notes

@@ -70,6 +70,30 @@ async fn fake(
             json!([{ "propertyName": "ApiKey", "attemptedValue": SECRET, "apiKey": SECRET }]),
         );
     }
+    // Sonarr (ReleaseController) : un pack dont il ne reconnaît pas la série est refusé en 404 tant qu'on ne lui
+    // donne pas `seriesId` ; pour choisir les épisodes (`shouldOverride`) il exige série, épisodes, qualité et langues.
+    if method == Method::POST && last == "release" {
+        let b: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+        if b["guid"] == "pack-unknown" {
+            if b["shouldOverride"] == true {
+                let full = ["seriesId", "episodeIds", "quality", "languages"]
+                    .iter()
+                    .all(|k| !b[*k].is_null());
+                if !full {
+                    return reply(
+                        StatusCode::BAD_REQUEST,
+                        json!({ "message": "override needs series, episodes, quality and languages" }),
+                    );
+                }
+            } else if b["seriesId"].is_null() {
+                return reply(
+                    StatusCode::NOT_FOUND,
+                    json!({ "message": "Unable to find matching series and episodes, will need to be manually provided" }),
+                );
+            }
+        }
+        return reply(StatusCode::OK, b);
+    }
     if method != Method::GET {
         return match (method.as_str(), last) {
             ("POST", "command") => reply(

@@ -5,7 +5,9 @@
 use crate::client::Method;
 use crate::config::Config;
 use crate::error::{ArrError, ErrorType, Result};
-use crate::schema::{any, boolean, enumeration, integer, string, unknown_record, Field, Schema};
+use crate::schema::{
+    any, array_of, boolean, enumeration, integer, string, unknown_record, Field, Schema, Ty,
+};
 use crate::tool::{Access, Args, BoxFut, Confirmation, Ctx, Handler, Precheck, ToolDef};
 use serde_json::{json, Map, Value};
 use std::sync::Arc;
@@ -334,15 +336,68 @@ fn command(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
 
 // ---------- arr_grab_release ----------
 
+/// Corps du grab. Quand Sonarr ne reconnaît pas la série d'un titre (« Unable to find matching series and
+/// episodes, will need to be manually provided »), il accepte (source `ReleaseController`, vérifiée) :
+/// - `seriesId` seul : il déduit les épisodes du titre avec cette série (pack de saison compris) ;
+/// - `shouldOverride` avec `seriesId` + `episodeIds` + `quality` + `languages` (la ligne d'`arr_releases`) pour
+///   choisir les épisodes, comme « Override and grab » de l'interface.
+///
+/// Sonarr seulement ; sans ces champs le corps reste `{guid, indexerId}`.
+fn grab_body(service: &str, a: &Args) -> Result<Value> {
+    let guid = a.text("guid");
+    if guid.trim().is_empty() {
+        return Err(bad("`guid` is required."));
+    }
+    let mut body = json!({ "guid": guid, "indexerId": positive(a, "indexerId")? });
+    let given = |k: &str| a.0.get(k).is_some_and(|v| !v.is_null());
+    if !["seriesId", "episodeIds", "quality", "languages"]
+        .iter()
+        .any(|k| given(k))
+    {
+        return Ok(body);
+    }
+    if service != "sonarr" {
+        return Err(bad(
+            "`seriesId`, `episodeIds`, `quality` and `languages` are only accepted for `sonarr`.",
+        ));
+    }
+    if !given("seriesId") {
+        return Err(bad("`seriesId` is required to map a release by hand."));
+    }
+    body["seriesId"] = json!(positive(a, "seriesId")?);
+    if !["episodeIds", "quality", "languages"]
+        .iter()
+        .any(|k| given(k))
+    {
+        return Ok(body);
+    }
+    let missing: Vec<&str> = ["episodeIds", "quality", "languages"]
+        .into_iter()
+        .filter(|k| !given(k))
+        .collect();
+    if !missing.is_empty() {
+        return Err(bad(format!(
+            "Choosing episodes needs `episodeIds`, `quality` and `languages` together (copy the last two from the arr_releases row); missing: {}.",
+            missing.join(", ")
+        )));
+    }
+    let quality = a.obj("quality");
+    let languages = a.list("languages");
+    if quality.is_empty() || languages.is_empty() || !languages.iter().all(Value::is_object) {
+        return Err(bad("`quality` must be the release's quality object and `languages` its list of language objects, as returned by arr_releases."));
+    }
+    body["shouldOverride"] = json!(true);
+    body["episodeIds"] = json!(ints_of(&a.0["episodeIds"], "episodeIds")?);
+    body["quality"] = Value::Object(quality);
+    body["languages"] = Value::Array(languages);
+    Ok(body)
+}
+
 fn grab_release(a: Args, ctx: Arc<Ctx>) -> BoxFut<Result<Value>> {
     boxed(async move {
         let service = a.text("service");
         check_service(service, &ARR4)?;
-        let guid = a.text("guid");
-        if guid.trim().is_empty() {
-            return Err(bad("`guid` is required."));
-        }
-        let body = json!({ "guid": guid, "indexerId": positive(&a, "indexerId")? });
+        let body = grab_body(service, &a)?;
         // Prowlarr télécharge par POST /search, les autres par POST /release.
         let path = if service == "prowlarr" {
             "/search"
@@ -532,7 +587,8 @@ fn pre_command(_: &Config, a: &Args) -> Result<()> {
     command_body(a.text("service"), a.text("name"), &a.obj("params")).map(|_| ())
 }
 fn pre_grab(_: &Config, a: &Args) -> Result<()> {
-    check_service(a.text("service"), &ARR4)
+    check_service(a.text("service"), &ARR4)?;
+    grab_body(a.text("service"), a).map(|_| ())
 }
 fn pre_create(_: &Config, a: &Args) -> Result<()> {
     check_resource(a.text("service"), a.text("resource"), Some(&CREATABLE))?;
@@ -598,11 +654,17 @@ fn conf_command(a: &Args) -> String {
     )
 }
 fn conf_grab(a: &Args) -> String {
+    let mapping = match (a.int("seriesId"), a.0.get("episodeIds")) {
+        (Some(s), Some(e)) => format!(", mapped by hand to series #{s} episodes {e}"),
+        (Some(s), None) => format!(", mapped by hand to series #{s}"),
+        _ => String::new(),
+    };
     format!(
-        "Download release {} from indexer #{} through {}?",
+        "Download release {} from indexer #{} through {}{}?",
         a.text("guid"),
         a.int("indexerId").unwrap_or(0),
-        a.text("service")
+        a.text("service"),
+        mapping
     )
 }
 fn conf_create(a: &Args) -> String {
@@ -717,8 +779,16 @@ pub fn tools(_cfg: &Config) -> Vec<ToolDef> {
         tool(
             "arr_grab_release",
             "Download a release",
-            "Send a release found with arr_releases (or arr_search_indexers on Prowlarr) to the download client.",
-            vec![svc(&ARR4), string("guid").desc("Release guid."), integer("indexerId").min(1).desc("Indexer id of the release.")],
+            "Send a release found with arr_releases (or arr_search_indexers on Prowlarr) to the download client. Sonarr only, when it answers `Unable to find matching series and episodes` (e.g. `Unknown Series` on a season pack): pass `seriesId` alone (Sonarr reads the episodes from the title), or `seriesId` + `episodeIds` + `quality` + `languages` (the last two copied from the arr_releases row) to choose the episodes.",
+            vec![
+                svc(&ARR4),
+                string("guid").desc("Release guid."),
+                integer("indexerId").min(1).desc("Indexer id of the release."),
+                integer("seriesId").min(1).opt().desc("Sonarr only: series the release belongs to."),
+                array_of("episodeIds", Ty::Int { min: Some(1), max: None }).opt().desc("Sonarr only, with seriesId, quality and languages: episode ids the release covers (1 to 500)."),
+                unknown_record("quality").opt().desc("Sonarr only, with episodeIds: the `quality` object of the arr_releases row."),
+                array_of("languages", Ty::Unknown).opt().desc("Sonarr only, with episodeIds: the `languages` list of the arr_releases row."),
+            ],
             Access::Write,
             false,
             grab_release,
@@ -840,6 +910,51 @@ mod tests {
         );
         assert!(merge(&cur, json!({ "monitord": false }).as_object().unwrap()).is_err());
         assert!(merge(&cur, json!({ "id": 9 }).as_object().unwrap()).is_err());
+    }
+
+    #[test]
+    fn grab_maps_a_release_by_hand_for_sonarr_only() {
+        let g = |v: Value| {
+            grab_body(
+                v["service"].as_str().unwrap(),
+                &Args(v.as_object().unwrap().clone()),
+            )
+        };
+        let base = json!({ "service": "sonarr", "guid": "g", "indexerId": 2 });
+        let with = |extra: Value| {
+            let mut m = base.clone();
+            m.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            m
+        };
+        let full = json!({ "seriesId": 7, "episodeIds": [11, 12], "quality": { "quality": { "id": 7 } }, "languages": [{ "id": 1 }] });
+        // Sans rattachement : corps inchangé.
+        assert_eq!(
+            g(base.clone()).unwrap(),
+            json!({ "guid": "g", "indexerId": 2 })
+        );
+        // seriesId seul : Sonarr déduit les épisodes du titre.
+        assert_eq!(
+            g(with(json!({ "seriesId": 7 }))).unwrap(),
+            json!({ "guid": "g", "indexerId": 2, "seriesId": 7 })
+        );
+        // Épisodes choisis : override complet.
+        let body = g(with(full.clone())).unwrap();
+        assert_eq!(body["shouldOverride"], true);
+        assert_eq!(body["episodeIds"], json!([11, 12]));
+        // Refus : épisodes sans qualité/langues, sans série, valeurs invalides, autre service.
+        assert!(g(with(json!({ "seriesId": 7, "episodeIds": [1] }))).is_err());
+        assert!(g(with(json!({ "episodeIds": [1] }))).is_err());
+        assert!(g(with(json!({ "seriesId": 0 }))).is_err());
+        assert!(g(with(json!({ "seriesId": 7, "episodeIds": [], "quality": { "q": 1 }, "languages": [{ "id": 1 }] }))).is_err());
+        assert!(g(with(
+            json!({ "seriesId": 7, "episodeIds": [1], "quality": { "q": 1 }, "languages": ["fr"] })
+        ))
+        .is_err());
+        let mut radarr = with(full);
+        radarr["service"] = json!("radarr");
+        assert!(g(radarr).is_err());
     }
 
     #[test]

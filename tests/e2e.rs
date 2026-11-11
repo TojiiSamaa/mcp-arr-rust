@@ -910,3 +910,55 @@ async fn arr_search_timeout_does_not_extend_other_calls() {
         started.elapsed()
     );
 }
+
+/// #9 : Sonarr ne reconnaît pas la série d'un pack de saison (404 « manually provided »). Le rattachement
+/// manuel (`seriesId`, ou `seriesId` + épisodes + qualité + langues) le débloque ; une moitié de rattachement est refusée sans requête.
+#[tokio::test]
+async fn grab_with_a_manual_sonarr_mapping_succeeds_where_the_bare_grab_fails() {
+    let (s, log) = start(&[WRITES, ("ARR_ELICIT", "off")]).await;
+    let base = json!({ "service": "sonarr", "guid": "pack-unknown", "indexerId": 4 });
+    let with = |extra: Value| {
+        let mut m = base.clone();
+        m.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        m
+    };
+    let posts = || sent(&log, "POST");
+
+    // Sans rattachement : le 404 de Sonarr est rendu tel quel.
+    let (err, v) = call(&s, "arr_grab_release", base.clone()).await;
+    assert!(err, "{v}");
+    assert_eq!(posts().len(), 1);
+
+    // seriesId seul : accepté, transmis.
+    let (err, v) = call(&s, "arr_grab_release", with(json!({ "seriesId": 7 }))).await;
+    assert!(!err && v["grabbed"]["seriesId"] == 7, "{v}");
+
+    // Épisodes choisis : override complet avec qualité et langues de la ligne d'arr_releases.
+    let full = json!({ "seriesId": 7, "episodeIds": [11, 12], "quality": { "quality": { "id": 7 } }, "languages": [{ "id": 1 }] });
+    let (err, v) = call(&s, "arr_grab_release", with(full)).await;
+    assert!(
+        !err && v["grabbed"]["shouldOverride"] == true
+            && v["grabbed"]["episodeIds"] == json!([11, 12]),
+        "{v}"
+    );
+
+    // Moitié de rattachement : refus avant toute requête.
+    let before = posts().len();
+    let (err, v) = call(
+        &s,
+        "arr_grab_release",
+        with(json!({ "seriesId": 7, "episodeIds": [11] })),
+    )
+    .await;
+    assert!(err, "{v}");
+    let (err, v) = call(
+        &s,
+        "arr_grab_release",
+        json!({ "service": "radarr", "guid": "g", "indexerId": 1, "seriesId": 7 }),
+    )
+    .await;
+    assert!(err, "{v}");
+    assert_eq!(posts().len(), before);
+}

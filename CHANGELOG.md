@@ -4,6 +4,9 @@ All notable changes are documented here, following [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Added
+- `arr_grab_release` accepts, for Sonarr only, a manual series/episode mapping for releases whose series Sonarr cannot infer from the title (`Unable to find matching series and episodes, will need to be manually provided`, e.g. `Unknown Series` on a season pack): `seriesId` alone (Sonarr reads the episodes from the title), or `seriesId` + `episodeIds` + `quality` + `languages` (the last two copied from the `arr_releases` row) sent with `shouldOverride`, as the Sonarr interface does. The values are validated before any request (positive ids, 1 to 500 episodes, all four together, other services refuse them); without these fields the request is unchanged. Test: `grab_with_a_manual_sonarr_mapping_succeeds_where_the_bare_grab_fails` (#9).
+
 ## [1.1.1] - 2026-11-10
 
 ### Added

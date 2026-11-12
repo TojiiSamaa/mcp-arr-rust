@@ -33,9 +33,17 @@ jobs:
       contents: write
       pull-requests: write
 
+  # Porte de sécurité : pas de release avec une CRITICAL/HIGH corrigeable dans l image (Trivy).
+  securite-image:
+    name: Securite image
+    uses: ./.github/workflows/securite-image.yml
+    permissions:
+      contents: read
+      security-events: write
+
   prepare:
     name: Resolve version and notes
-    needs: checks
+    needs: [checks, securite-image]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:

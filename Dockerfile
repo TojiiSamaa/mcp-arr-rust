@@ -7,7 +7,7 @@ COPY test ./test
 RUN cargo build --release --locked
 
 FROM alpine:3@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a
-RUN apk add --no-cache ca-certificates && adduser -D -u 1000 arrmcp
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates && adduser -D -u 1000 arrmcp
 COPY --from=builder /src/target/release/arrmcp /usr/local/bin/arrmcp
 USER arrmcp
 EXPOSE 8000
